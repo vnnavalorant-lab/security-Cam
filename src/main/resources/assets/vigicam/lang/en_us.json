@@ -1,1 +1,5 @@
-{ "block.vigicam.surveillance_camera": "Surveillance Camera" }
+{
+  "block.vigicam.surveillance_camera": "Surveillance Camera",
+  "key.vigicam.toggle_vision": "Switch camera vision (night/thermal)",
+  "key.categories.vigicam": "VigiCam"
+}

@@ -1,0 +1,16 @@
+{
+  "targets": ["swap"],
+  "passes": [
+    {
+      "name": "vigicam:camera_thermal",
+      "intarget": "minecraft:main",
+      "outtarget": "swap",
+      "auxtargets": [
+        { "name": "MainDepthSampler",   "id": "minecraft:main:depth" },
+        { "name": "EntitySampler",      "id": "vigicam:entities" },
+        { "name": "EntityDepthSampler", "id": "vigicam:entities:depth" }
+      ]
+    },
+    { "name": "blit", "intarget": "swap", "outtarget": "minecraft:main" }
+  ]
+}

@@ -10,6 +10,9 @@ public final class CameraViewClient {
     private static float baseYaw = 0f;
     private static boolean armed = false;
 
+    public enum Mode { NIGHT, THERMAL }
+    private static Mode mode = Mode.NIGHT;
+
     private CameraViewClient() {}
 
     public static boolean isActive() { return pos != null; }
@@ -19,9 +22,14 @@ public final class CameraViewClient {
         pos = p;
         baseYaw = yaw;
         armed = false;
+        mode = Mode.NIGHT;
     }
 
-    public static void stop() { pos = null; }
+    public static void stop() { pos = null; mode = Mode.NIGHT; }
+
+    public static Mode getMode() { return mode; }
+    public static boolean isThermal() { return pos != null && mode == Mode.THERMAL; }
+    public static void toggleMode() { mode = (mode == Mode.NIGHT) ? Mode.THERMAL : Mode.NIGHT; }
 
     /** Sai ao apertar Shift, mas só depois de ter soltado o Shift uma vez (evita sair na hora). */
     public static boolean shouldExit(boolean sneakPressed) {

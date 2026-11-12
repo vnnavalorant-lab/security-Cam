@@ -5,9 +5,14 @@
   "compatibilityLevel": "JAVA_17",
   "client": [
     "CameraMixin",
+    "EntityMixin",
     "GameRendererInvoker",
     "GameRendererMixin",
-    "KeyboardInputMixin"
+    "KeyboardInputMixin",
+    "MinecraftClientMixin",
+    "PostEffectProcessorMixin",
+    "WorldRendererAccessor",
+    "WorldRendererMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

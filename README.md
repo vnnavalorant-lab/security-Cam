@@ -4,6 +4,12 @@ Bloco "Câmera de Vigilância". Clique direito nela e você passa a ver pelo pon
 (varrendo de um lado para o outro) com o shader fisheye + VHS + visão noturna verde e HUD "LIVE".
 Shift (depois de soltar uma vez) sai da câmera.
 
+**Visão térmica:** dentro da câmera aperte **V** (configurável em Controles > VigiCam) para alternar entre a
+visão noturna/VHS e a visão térmica. Na térmica o mundo vira um mapa de calor (céu frio, lava/fogo quentes) e cada
+entidade é colorida pela sua "temperatura" (jogador/animais quentes, mortos-vivos e golens frios, blaze/fogo
+em brasa), com marcadores, nome e °C, retículo, Max/Min e barra de escala. As temperaturas ficam em `HeatUtil.java`;
+para enxergar entidades através de paredes troque `XRAY` para `true` em `camera_thermal.fsh`.
+
 ## Como compilar
 1. Gere um projeto base em https://fabricmc.net/develop/template (1.20.1) para ter o gradle wrapper
    (gradlew, gradle/wrapper), ou copie o wrapper de qualquer mod Fabric 1.20.1 seu.

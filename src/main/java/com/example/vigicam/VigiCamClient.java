@@ -3,6 +3,7 @@ package com.example.vigicam;
 import com.example.vigicam.mixin.GameRendererInvoker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
@@ -11,20 +12,45 @@ import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
+import org.lwjgl.glfw.GLFW;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 public class VigiCamClient implements ClientModInitializer {
-    private static final Identifier SHADER = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_vhs.json");
+    private static final Identifier SHADER_NIGHT = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_vhs.json");
+    private static final Identifier SHADER_THERMAL = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_thermal.json");
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("h:mm a");
+
+    private static final double SCAN_RANGE = 48.0;
+    private static final int MAX_TARGETS = 16;
+
+    private static KeyBinding toggleKey;
+
+    // resultado do scan térmico (atualizado no tick)
+    private static final List<Entity> targets = new ArrayList<>();
+    private static float maxC = 0f, minC = 0f;
 
     @Override
     public void onInitializeClient() {
+        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.vigicam.toggle_vision", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "key.categories.vigicam"));
+
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_CAMERA, (client, handler, buf, sender) -> {
             BlockPos pos = buf.readBlockPos();
             float yaw = buf.readFloat();
@@ -47,45 +73,185 @@ public class VigiCamClient implements ClientModInitializer {
                         : TypedActionResult.pass(p.getStackInHand(h)));
     }
 
+    private static void applyShader(MinecraftClient mc) {
+        Identifier id = CameraViewClient.isThermal() ? SHADER_THERMAL : SHADER_NIGHT;
+        ((GameRendererInvoker) mc.gameRenderer).invokeLoadPostProcessor(id);
+    }
+
     private static void startView(MinecraftClient mc, BlockPos pos, float yaw) {
         if (CameraViewClient.isActive()) return;
-        ((GameRendererInvoker) mc.gameRenderer).invokeLoadPostProcessor(SHADER);
-        CameraViewClient.start(pos, yaw);
+        CameraViewClient.start(pos, yaw);   // começa na visão noturna
+        applyShader(mc);
     }
 
     private static void stopView(MinecraftClient mc) {
         mc.gameRenderer.disablePostProcessor();
         CameraViewClient.stop();
+        targets.clear();
     }
 
     private static void tick(MinecraftClient mc) {
-        if (!CameraViewClient.isActive()) return;
+        if (!CameraViewClient.isActive()) {
+            while (toggleKey.wasPressed()) { /* descarta */ }
+            return;
+        }
         boolean sneak = mc.options.sneakKey.isPressed();
         if (mc.player == null || mc.world == null
                 || !(mc.world.getBlockState(CameraViewClient.getBlockPos()).getBlock() instanceof SurveillanceCameraBlock)
                 || mc.player.hurtTime > 0
                 || CameraViewClient.shouldExit(sneak)) {
             stopView(mc);
+            return;
         }
+
+        boolean toggled = false;
+        while (toggleKey.wasPressed()) toggled = !toggled;
+        if (toggled) {
+            CameraViewClient.toggleMode();
+            applyShader(mc);
+        }
+
+        if (CameraViewClient.isThermal() && mc.player.age % 2 == 0) scanEntities(mc);
+    }
+
+    /** Procura entidades vivas à vista da câmera (para marcadores e para o Max/Min do HUD). */
+    private static void scanEntities(MinecraftClient mc) {
+        Vec3d cam = CameraViewClient.getPos();
+        targets.clear();
+
+        List<Entity> found = mc.world.getOtherEntities(null,
+                Box.of(cam, SCAN_RANGE * 2, SCAN_RANGE * 2, SCAN_RANGE * 2),
+                e -> e instanceof LivingEntity && e.isAlive() && e != mc.player
+                        && e.squaredDistanceTo(cam) <= SCAN_RANGE * SCAN_RANGE);
+        found.sort(Comparator.comparingDouble(e -> e.squaredDistanceTo(cam)));
+
+        float hottest = Float.NEGATIVE_INFINITY;
+        for (Entity e : found) {
+            hottest = Math.max(hottest, HeatUtil.celsius(e));
+            if (targets.size() >= MAX_TARGETS) continue;
+            Vec3d center = e.getBoundingBox().getCenter();
+            boolean clear = mc.world.raycast(new RaycastContext(cam, center,
+                    RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player))
+                    .getType() == HitResult.Type.MISS;
+            if (clear) targets.add(e);
+        }
+
+        float biome = mc.world.getBiome(BlockPos.ofFloored(cam)).value().getTemperature();
+        minC = biome * 25f - 5f - (mc.world.isDay() ? 0f : 5f);
+        maxC = Math.max(minC + 12f, hottest);
     }
 
     private static void renderHud(DrawContext ctx, float tickDelta) {
         if (!CameraViewClient.isActive()) return;
         MinecraftClient mc = MinecraftClient.getInstance();
+        boolean thermal = CameraViewClient.isThermal();
         int w = ctx.getScaledWindowWidth(), h = ctx.getScaledWindowHeight();
-        int green = 0xFF55FF55, len = 20, t = 2, m = 12;
+        int color = thermal ? 0xFFFFFFFF : 0xFF55FF55;
+        int len = 20, t = 2, m = 12;
 
         boolean blink = mc.player != null && (mc.player.age / 10) % 2 == 0;
         ctx.drawText(mc.textRenderer, (blink ? "● " : "  ") + "LIVE", m + 6, m + 6, 0xFFFF3030, true);
 
         String time = LocalTime.now().format(CLOCK);
-        ctx.drawText(mc.textRenderer, time, w - m - 6 - mc.textRenderer.getWidth(time), m + 6, green, true);
-        ctx.drawCenteredTextWithShadow(mc.textRenderer, "Shift para sair", w / 2, h - 34, green);
+        ctx.drawText(mc.textRenderer, time, w - m - 6 - mc.textRenderer.getWidth(time), m + 6, color, true);
+
+        String hint = "Shift para sair  |  [" + toggleKey.getBoundKeyLocalizedText().getString() + "] "
+                + (thermal ? "visão noturna" : "visão térmica");
+        ctx.drawCenteredTextWithShadow(mc.textRenderer, hint, w / 2, h - 34, color);
 
         // cantos do enquadramento
-        ctx.fill(m, m, m + len, m + t, green);                 ctx.fill(m, m, m + t, m + len, green);
-        ctx.fill(w - m - len, m, w - m, m + t, green);         ctx.fill(w - m - t, m, w - m, m + len, green);
-        ctx.fill(m, h - m - t, m + len, h - m, green);         ctx.fill(m, h - m - len, m + t, h - m, green);
-        ctx.fill(w - m - len, h - m - t, w - m, h - m, green); ctx.fill(w - m - t, h - m - len, w - m, h - m, green);
+        ctx.fill(m, m, m + len, m + t, color);                 ctx.fill(m, m, m + t, m + len, color);
+        ctx.fill(w - m - len, m, w - m, m + t, color);         ctx.fill(w - m - t, m, w - m, m + len, color);
+        ctx.fill(m, h - m - t, m + len, h - m, color);         ctx.fill(m, h - m - len, m + t, h - m, color);
+        ctx.fill(w - m - len, h - m - t, w - m, h - m, color); ctx.fill(w - m - t, h - m - len, w - m, h - m, color);
+
+        if (thermal) renderThermalHud(ctx, mc, tickDelta, w, h, m);
+    }
+
+    // ------------------------------------------------------------------ HUD térmico
+
+    private static void renderThermalHud(DrawContext ctx, MinecraftClient mc, float tickDelta, int w, int h, int m) {
+        // leitura Max / Min
+        String max = String.format("%.1f", maxC), min = String.format("%.1f", minC);
+        int bx = m + 6, by = m + 22;
+        ctx.fill(bx - 3, by - 3, bx + 92, by + 22, 0x99000000);
+        ctx.drawText(mc.textRenderer, "Max", bx, by, 0xFFCCCCCC, false);
+        ctx.drawText(mc.textRenderer, "Min", bx + 40, by, 0xFFCCCCCC, false);
+        ctx.drawText(mc.textRenderer, "°C", bx + 76, by, 0xFFCCCCCC, false);
+        ctx.drawText(mc.textRenderer, max, bx, by + 11, 0xFFFFFFFF, false);
+        ctx.drawText(mc.textRenderer, min, bx + 40, by + 11, 0xFFFFFFFF, false);
+
+        // barra de escala à direita
+        int sx1 = w - m - 12, sx2 = w - m - 5, sy1 = h / 2 - 60, sy2 = h / 2 + 60;
+        int steps = 7;
+        for (int i = 0; i < steps; i++) {
+            float t0 = 1f - i / (float) steps, t1 = 1f - (i + 1) / (float) steps;
+            int y0 = sy1 + (sy2 - sy1) * i / steps, y1 = sy1 + (sy2 - sy1) * (i + 1) / steps;
+            ctx.fillGradient(sx1, y0, sx2, y1, HeatUtil.palette(t0), HeatUtil.palette(t1));
+        }
+        ctx.drawText(mc.textRenderer, max, sx1 - mc.textRenderer.getWidth(max) - 3, sy1 - 3, 0xFFFFFFFF, true);
+        ctx.drawText(mc.textRenderer, min, sx1 - mc.textRenderer.getWidth(min) - 3, sy2 - 6, 0xFFFFFFFF, true);
+
+        // retículo vermelho
+        int cx = w / 2, cy = h / 2, red = 0xFFFF2020;
+        ctx.fill(cx - 10, cy - 1, cx - 3, cy + 1, red);
+        ctx.fill(cx + 3, cy - 1, cx + 10, cy + 1, red);
+        ctx.fill(cx - 1, cy - 10, cx + 1, cy - 3, red);
+        ctx.fill(cx - 1, cy + 3, cx + 1, cy + 10, red);
+
+        // marcadores nas entidades
+        Vec3d cam = CameraViewClient.getPos();
+        float yaw = CameraViewClient.getYaw(tickDelta), pitch = CameraViewClient.getPitch();
+        Vec3d f = Vec3d.fromPolar(pitch, yaw);
+        Vec3d r = f.crossProduct(new Vec3d(0, 1, 0)).normalize();
+        Vec3d u = r.crossProduct(f);
+        double tanHalf = Math.tan(Math.toRadians(mc.options.getFov().getValue()) / 2.0);
+        double aspect = w / (double) h;
+
+        Entity locked = null;
+        double lockedDist = Double.MAX_VALUE;
+
+        for (Entity e : targets) {
+            if (!e.isAlive()) continue;
+            Vec3d lerp = e.getLerpedPos(tickDelta);
+            Box b = e.getBoundingBox().offset(lerp.subtract(e.getPos()));
+            double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+            boolean ok = true;
+            for (int i = 0; i < 8 && ok; i++) {
+                Vec3d p = new Vec3d((i & 1) == 0 ? b.minX : b.maxX, (i & 2) == 0 ? b.minY : b.maxY,
+                        (i & 4) == 0 ? b.minZ : b.maxZ).subtract(cam);
+                double depth = p.dotProduct(f);
+                if (depth < 0.1) { ok = false; break; }
+                double sx = (p.dotProduct(r) / depth / (tanHalf * aspect) * 0.5 + 0.5) * w;
+                double sy = (0.5 - p.dotProduct(u) / depth / tanHalf * 0.5) * h;
+                minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
+                minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+            }
+            if (!ok || maxX < 0 || minX > w || maxY < 0 || minY > h) continue;
+
+            int col = HeatUtil.palette(Math.max(0.35f, HeatUtil.heat(e)));
+            drawBrackets(ctx, (int) minX - 2, (int) minY - 2, (int) maxX + 2, (int) maxY + 2, col);
+
+            String label = e.getName().getString() + "  " + String.format("%.1f°C", HeatUtil.celsius(e));
+            ctx.drawText(mc.textRenderer, label, (int) minX - 2, (int) minY - 12, col, true);
+
+            if (minX <= cx && cx <= maxX && minY <= cy && cy <= maxY && e.squaredDistanceTo(cam) < lockedDist) {
+                locked = e;
+                lockedDist = e.squaredDistanceTo(cam);
+            }
+        }
+
+        if (locked != null) {
+            String s = String.format("%.1f°C", HeatUtil.celsius(locked));
+            ctx.drawCenteredTextWithShadow(mc.textRenderer, s, cx, cy + 16, 0xFFFF4040);
+        }
+    }
+
+    private static void drawBrackets(DrawContext ctx, int x0, int y0, int x1, int y1, int col) {
+        int l = Math.max(3, Math.min(8, Math.min(x1 - x0, y1 - y0) / 3));
+        ctx.fill(x0, y0, x0 + l, y0 + 1, col);     ctx.fill(x0, y0, x0 + 1, y0 + l, col);
+        ctx.fill(x1 - l, y0, x1, y0 + 1, col);     ctx.fill(x1 - 1, y0, x1, y0 + l, col);
+        ctx.fill(x0, y1 - 1, x0 + l, y1, col);     ctx.fill(x0, y1 - l, x0 + 1, y1, col);
+        ctx.fill(x1 - l, y1 - 1, x1, y1, col);     ctx.fill(x1 - 1, y1 - l, x1, y1, col);
     }
 }
