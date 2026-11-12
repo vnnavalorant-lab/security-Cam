@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "vigicam",
+  "version": "${version}",
+  "name": "VigiCam",
+  "description": "Câmera de vigilância: ao ver pela câmera, o shader (visão noturna + VHS + fisheye) ativa durante o uso.",
+  "authors": ["Você"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.example.vigicam.VigiCam"],
+    "client": ["com.example.vigicam.VigiCamClient"]
+  },
+  "mixins": [
+    { "config": "vigicam.mixins.json", "environment": "client" }
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

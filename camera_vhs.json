@@ -1,0 +1,7 @@
+{
+  "targets": ["swap"],
+  "passes": [
+    { "name": "vigicam:camera_vhs", "intarget": "minecraft:main", "outtarget": "swap" },
+    { "name": "blit", "intarget": "swap", "outtarget": "minecraft:main" }
+  ]
+}
