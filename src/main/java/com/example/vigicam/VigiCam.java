@@ -21,7 +21,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.particle.SimpleParticleType;
+import net.minecraft.particle.DefaultParticleType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -58,9 +58,9 @@ public class VigiCam implements ModInitializer {
             new BlockItem(AMPLIFYING_ANTENNA, new FabricItemSettings());
 
     // partículas do sinal da antena (desenhadas no cliente por SignalParticle)
-    public static final SimpleParticleType SIGNAL_WAVE = FabricParticleTypes.simple();
-    public static final SimpleParticleType SIGNAL_GLOW = FabricParticleTypes.simple();
-    public static final SimpleParticleType SIGNAL_SPARK = FabricParticleTypes.simple();
+    public static final DefaultParticleType SIGNAL_WAVE = FabricParticleTypes.simple();
+    public static final DefaultParticleType SIGNAL_GLOW = FabricParticleTypes.simple();
+    public static final DefaultParticleType SIGNAL_SPARK = FabricParticleTypes.simple();
 
     public static final Item DRONE_ITEM = new DroneItem(new FabricItemSettings().maxCount(16));
     public static final Item REMOTE_ITEM = new RemoteItem(new FabricItemSettings().maxCount(1));
