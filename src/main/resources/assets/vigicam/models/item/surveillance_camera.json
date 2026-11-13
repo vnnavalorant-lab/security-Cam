@@ -1,1 +1,4 @@
-{ "parent": "vigicam:block/surveillance_camera" }
+{
+  "parent": "minecraft:item/generated",
+  "textures": { "layer0": "vigicam:item/surveillance_camera" }
+}

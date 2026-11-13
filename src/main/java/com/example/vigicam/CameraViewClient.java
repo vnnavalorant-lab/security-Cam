@@ -11,20 +11,22 @@ import net.minecraft.util.math.Vec3d;
 public final class CameraViewClient {
     private CameraViewClient() {}
 
-    public enum Mode { NIGHT, THERMAL }
+    public enum Mode { CAM, NIGHT, THERMAL }
     public enum Kind { BLOCK, DRONE }
 
-    private static final float SWEEP_AMPL = 35f;
-    private static final float SWEEP_STEP = 1f / 40f;      // rad/tick da varredura automática
+    public static final float SWEEP_AMPL = 35f;
+    public static final float SWEEP_STEP = 1f / 40f;       // rad/tick da varredura automática
     private static final float AUTO_PITCH = 12f;
     private static final float MANUAL_YAW_LIMIT = 110f;    // quanto a câmera fixa pode girar para cada lado
     private static final float PITCH_MIN = -50f, PITCH_MAX = 80f;
     private static final int BLEND_TICKS = 20;
     public static final double DRONE_EYE = 0.2;
+    private static final double LENS_DIST = 0.72;           // pivô -> lente (blocos)
+    private static final double LENS_HEIGHT = 7.5 / 16.0;    // altura da lente no modelo
 
     private static boolean active;
     private static Kind kind = Kind.BLOCK;
-    private static Mode mode = Mode.NIGHT;
+    private static Mode mode = Mode.CAM;
     private static boolean armed;
 
     // câmera fixa
@@ -57,7 +59,12 @@ public final class CameraViewClient {
     public static boolean isThermal() { return active && mode == Mode.THERMAL; }
     public static boolean isManual() { return manual; }
     public static Mode getMode() { return mode; }
-    public static void toggleMode() { mode = (mode == Mode.NIGHT) ? Mode.THERMAL : Mode.NIGHT; }
+    public static boolean isNight() { return active && mode == Mode.NIGHT; }
+    public static Mode nextMode() {
+        return switch (mode) { case CAM -> Mode.NIGHT; case NIGHT -> Mode.THERMAL; case THERMAL -> Mode.CAM; };
+    }
+    /** Alterna a visão: normal (VHS + fisheye + visor) -> noturna (verde) -> térmica -> normal. */
+    public static void toggleMode() { mode = nextMode(); }
     public static BlockPos getBlockPos() { return pos; }
     public static int getDroneId() { return droneId; }
     public static int getIndex() { return index; }
@@ -71,7 +78,8 @@ public final class CameraViewClient {
         baseYaw = yaw;
         manual = false;
         blendTicks = 0;
-        sweepPhase = 0f;
+        // começa a varredura na mesma fase da animação do modelo no mundo (sem pulo ao entrar na câmera)
+        sweepPhase = mc.world != null ? mc.world.getTime() * SWEEP_STEP : 0f;
         droneId = -1;
         index = idx;
         count = cnt;
@@ -95,7 +103,7 @@ public final class CameraViewClient {
         if (active) return false;
         active = true;
         armed = false;
-        mode = Mode.NIGHT;
+        mode = Mode.CAM;
         if (mc.player != null) {
             savedYaw = mc.player.getYaw();
             savedPitch = mc.player.getPitch();
@@ -112,7 +120,7 @@ public final class CameraViewClient {
         droneId = -1;
         index = -1;
         count = 0;
-        mode = Mode.NIGHT;
+        mode = Mode.CAM;
     }
 
     public static boolean shouldExit(boolean sneakPressed) {
@@ -182,9 +190,13 @@ public final class CameraViewClient {
             }
             return lastPos;
         }
-        // câmera fixa: um pouco à frente do bloco
-        double r = Math.toRadians(baseYaw);
-        return new Vec3d(pos.getX() + 0.5 - Math.sin(r) * 0.6, pos.getY() + 0.5, pos.getZ() + 0.5 + Math.cos(r) * 0.6);
+        // câmera fixa: na lente do modelo. O pivô "root" fica 2px atrás do centro do bloco (lado da base)
+        // e a lente está ~0,7 bloco à frente dele, na direção para onde a câmera está olhando agora.
+        double fr = Math.toRadians(baseYaw);
+        double px = pos.getX() + 0.5 + Math.sin(fr) * (2.0 / 16.0);
+        double pz = pos.getZ() + 0.5 - Math.cos(fr) * (2.0 / 16.0);
+        double ry = Math.toRadians(getYaw(MinecraftClient.getInstance(), tickDelta));
+        return new Vec3d(px - Math.sin(ry) * LENS_DIST, pos.getY() + LENS_HEIGHT, pz + Math.cos(ry) * LENS_DIST);
     }
 
     public static float getYaw(float tickDelta) { return getYaw(MinecraftClient.getInstance(), tickDelta); }

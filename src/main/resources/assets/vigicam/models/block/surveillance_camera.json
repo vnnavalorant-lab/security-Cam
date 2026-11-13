@@ -1,26 +1,6 @@
 {
   "parent": "minecraft:block/block",
   "textures": {
-    "particle": "minecraft:block/iron_block",
-    "body": "minecraft:block/iron_block",
-    "lens": "minecraft:block/black_concrete"
-  },
-  "elements": [
-    {
-      "from": [4, 4, 4], "to": [12, 12, 14],
-      "faces": {
-        "north": { "texture": "#body" }, "south": { "texture": "#body" },
-        "east":  { "texture": "#body" }, "west":  { "texture": "#body" },
-        "up":    { "texture": "#body" }, "down":  { "texture": "#body" }
-      }
-    },
-    {
-      "from": [5, 5, 2], "to": [11, 11, 4],
-      "faces": {
-        "north": { "texture": "#lens" }, "south": { "texture": "#lens" },
-        "east":  { "texture": "#lens" }, "west":  { "texture": "#lens" },
-        "up":    { "texture": "#lens" }, "down":  { "texture": "#lens" }
-      }
-    }
-  ]
+    "particle": "minecraft:block/iron_block"
+  }
 }

@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
@@ -37,6 +38,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public class VigiCamClient implements ClientModInitializer {
+    private static final Identifier SHADER_CAM = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_view.json");
     private static final Identifier SHADER_NIGHT = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_vhs.json");
     private static final Identifier SHADER_THERMAL = new Identifier(VigiCam.MOD_ID, "shaders/post/camera_thermal.json");
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("h:mm a");
@@ -61,6 +63,7 @@ public class VigiCamClient implements ClientModInitializer {
 
         EntityModelLayerRegistry.registerModelLayer(DroneModel.LAYER, DroneModel::getTexturedModelData);
         EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);
+        BlockEntityRendererFactories.register(VigiCam.CAMERA_BE, CameraBlockEntityRenderer::new);
 
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_CAMERA, (client, handler, buf, sender) -> {
             BlockPos pos = buf.readBlockPos();
@@ -99,7 +102,11 @@ public class VigiCamClient implements ClientModInitializer {
     /** Carrega o shader da visão atual (noturna ou térmica). */
     private static void applyShader(MinecraftClient mc, boolean force) {
         if (!force && !CameraViewClient.isActive()) return;
-        Identifier id = CameraViewClient.isThermal() ? SHADER_THERMAL : SHADER_NIGHT;
+        Identifier id = switch (CameraViewClient.getMode()) {
+            case THERMAL -> SHADER_THERMAL;
+            case NIGHT -> SHADER_NIGHT;
+            default -> SHADER_CAM;
+        };
         ((GameRendererInvoker) mc.gameRenderer).invokeLoadPostProcessor(id);
     }
 
@@ -195,7 +202,8 @@ public class VigiCamClient implements ClientModInitializer {
         boolean thermal = CameraViewClient.isThermal();
         boolean drone = CameraViewClient.isDrone();
         int w = ctx.getScaledWindowWidth(), h = ctx.getScaledWindowHeight();
-        int color = thermal ? 0xFFFFFFFF : 0xFF55FF55;
+        boolean night = CameraViewClient.isNight();
+        int color = night ? 0xFF55FF55 : 0xFFFFFFFF;   // verde só na visão noturna
         int len = 20, t = 2, m = 12;
 
         boolean blink = (mc.player.age / 10) % 2 == 0;
@@ -204,7 +212,7 @@ public class VigiCamClient implements ClientModInitializer {
         // título e modo de controle
         String title = drone ? "DRONE" : "CAM";
         if (CameraViewClient.getCount() > 0) title += "  " + (CameraViewClient.getIndex() + 1) + "/" + CameraViewClient.getCount();
-        title += thermal ? "  TÉRMICA" : "  NOTURNA";
+        title += thermal ? "  TÉRMICA" : (night ? "  NOTURNA" : "  NORMAL");
         ctx.drawText(mc.textRenderer, title, m + 6, m + 18, color, true);
         if (drone) {
             ctx.drawText(mc.textRenderer, "PILOTO", m + 6, m + 30, 0xFFFFD040, true);
@@ -217,7 +225,12 @@ public class VigiCamClient implements ClientModInitializer {
         String time = LocalTime.now().format(CLOCK);
         ctx.drawText(mc.textRenderer, time, w - m - 6 - mc.textRenderer.getWidth(time), m + 6, color, true);
 
-        String vis = "[" + toggleKey.getBoundKeyLocalizedText().getString() + "] " + (thermal ? "visão noturna" : "visão térmica");
+        String nextVis = switch (CameraViewClient.nextMode()) {
+            case NIGHT -> "visão noturna";
+            case THERMAL -> "visão térmica";
+            default -> "visão normal";
+        };
+        String vis = "[" + toggleKey.getBoundKeyLocalizedText().getString() + "] " + nextVis;
         String hint = drone
                 ? "WASD mover  |  Espaço/Ctrl subir/descer  |  Shift sair  |  " + vis
                 : "Shift sair  |  " + vis + "  |  [" + manualKey.getBoundKeyLocalizedText().getString() + "] "

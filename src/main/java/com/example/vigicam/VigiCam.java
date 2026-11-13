@@ -8,8 +8,10 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.block.Block;
+import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnGroup;
@@ -45,12 +47,15 @@ public class VigiCam implements ModInitializer {
     public static final Item REMOTE_ITEM = new RemoteItem(new FabricItemSettings().maxCount(1));
 
     public static EntityType<DroneEntity> DRONE;
+    public static BlockEntityType<SurveillanceCameraBlockEntity> CAMERA_BE;
 
     @Override
     public void onInitialize() {
         Identifier id = new Identifier(MOD_ID, "surveillance_camera");
         Registry.register(Registries.BLOCK, id, SURVEILLANCE_CAMERA);
         Registry.register(Registries.ITEM, id, SURVEILLANCE_CAMERA_ITEM);
+        CAMERA_BE = Registry.register(Registries.BLOCK_ENTITY_TYPE, id,
+                FabricBlockEntityTypeBuilder.create(SurveillanceCameraBlockEntity::new, SURVEILLANCE_CAMERA).build());
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "drone"), DRONE_ITEM);
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "remote"), REMOTE_ITEM);
 

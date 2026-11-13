@@ -1,8 +1,16 @@
 # VigiCam (Fabric 1.20.1)
 
 Bloco "Câmera de Vigilância". Clique direito nela e você passa a ver pelo ponto de vista da câmera
-(varrendo de um lado para o outro) com o shader fisheye + VHS + visão noturna verde e HUD "LIVE".
+(varrendo de um lado para o outro) com o shader **fisheye + VHS + visor da câmera** (sem tingimento verde) e HUD "LIVE".
 Shift (depois de soltar uma vez) sai da câmera.
+
+**Modelo:** `security_camera.bbmodel` (Blockbench) -> `assets/vigicam/geo/security_camera.geo.json`, desenhado por um
+BlockEntityRenderer. Pivô `base` = suporte fixo, sempre na extremidade do bloco e centralizado (oposta à lente);
+pivô `root` = corpo da câmera, que varre de um lado para o outro (e segue a visão quando você está usando a câmera).
+Ao colocar, a câmera fica **virada para o jogador**. Para trocar o modelo, exporte de novo o JSON (mesma estrutura de grupos
+`base` > `root`) e a textura em `textures/entity/security_camera.png`. Ícone: `textures/item/surveillance_camera.png`.
+
+**Visões (tecla V):** normal (VHS + fisheye + visor) -> noturna (verde) -> térmica -> normal.
 
 **Visão térmica:** dentro da câmera aperte **V** (configurável em Controles > VigiCam) para alternar entre a
 visão noturna/VHS e a visão térmica. Na térmica o mundo vira um mapa de calor (céu frio, lava/fogo quentes) e cada

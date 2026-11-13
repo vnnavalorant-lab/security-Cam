@@ -1,7 +1,10 @@
 package com.example.vigicam;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.HorizontalFacingBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.player.PlayerEntity;
@@ -17,8 +20,10 @@ import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 
-public class SurveillanceCameraBlock extends HorizontalFacingBlock {
-    private static final VoxelShape SHAPE = Block.createCuboidShape(2, 2, 2, 14, 14, 14);
+public class SurveillanceCameraBlock extends HorizontalFacingBlock implements BlockEntityProvider {
+    // o modelo ocupa 6px de largura e vai de uma extremidade do bloco à outra (base encostada na extremidade oposta à lente)
+    private static final VoxelShape SHAPE_NS = Block.createCuboidShape(5, 0, 0, 11, 12, 16);
+    private static final VoxelShape SHAPE_EW = Block.createCuboidShape(0, 0, 5, 16, 12, 11);
 
     public SurveillanceCameraBlock(Settings settings) {
         super(settings);
@@ -32,13 +37,24 @@ public class SurveillanceCameraBlock extends HorizontalFacingBlock {
 
     @Override
     public BlockState getPlacementState(ItemPlacementContext ctx) {
-        // a câmera olha para o mesmo lado que o player estava olhando ao colocar
-        return getDefaultState().with(FACING, ctx.getHorizontalPlayerFacing());
+        // a câmera é colocada virada para o jogador (lente apontando para ele, base na extremidade oposta)
+        return getDefaultState().with(FACING, ctx.getHorizontalPlayerFacing().getOpposite());
     }
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
-        return SHAPE;
+        return state.get(FACING).getAxis() == Direction.Axis.Z ? SHAPE_NS : SHAPE_EW;
+    }
+
+    // o desenho é feito pelo CameraBlockEntityRenderer (modelo animado)
+    @Override
+    public BlockRenderType getRenderType(BlockState state) {
+        return BlockRenderType.INVISIBLE;
+    }
+
+    @Override
+    public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
+        return new SurveillanceCameraBlockEntity(pos, state);
     }
 
     @Override
