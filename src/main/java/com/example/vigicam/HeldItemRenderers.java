@@ -34,8 +34,9 @@ public final class HeldItemRenderers {
     /**
      * Mesmo quadro do GeckoLib (o plugin do Blockbench em que o "display" foi ajustado): depois do display do JSON
      * (aplicado pelo vanilla) o GeoItemRenderer faz translate(0.5, 0.51, 0.5), ou seja, a origem do modelo (y=0, centro x/z)
-     * fica no centro do cubo, com Y para cima. Este modelo é de entidade Java (Y para baixo, chão em y=24 px) e o
-     * EntityRenderer o vira com scale(-1,-1,1), então: escala (-1/16,-1/16,1/16) e sobe o chão (y=24) para a origem.
+     * fica no centro do cubo, com Y para cima. Este modelo é um ModelPart Java (Y para baixo, chão em y=24 px); o ModelPart
+     * já divide por 16 internamente (a matriz fica em blocos, sem escala 1/16), e o EntityRenderer o vira com
+     * scale(-1,-1,1). Aqui: scale(-1,-1,1) e sobe o chão (24 px = 1,5 bloco) para a origem.
      * Nenhum ajuste de posição/escala além disso: quem manda é o "display".
      */
     public static void drone(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
@@ -43,8 +44,8 @@ public final class HeldItemRenderers {
         if (droneModel == null) droneModel = new DroneModel(mc.getEntityModelLoader().getModelPart(DroneModel.LAYER));
         m.push();
         m.translate(0.5, 0.51, 0.5);
-        m.scale(-1f / 16f, -1f / 16f, 1f / 16f);
-        m.translate(0, -24, 0);
+        m.scale(-1f, -1f, 1f);
+        m.translate(0.0, -24.0 / 16.0, 0.0);
         droneModel.setRotorAngle(-((Util.getMeasuringTimeMs() % 250L) / 250f) * 360f);   // 4 voltas/s
         VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(DRONE_TEX));
         droneModel.render(m, vc, light);
