@@ -15,7 +15,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.RotationAxis;
-import net.minecraft.entity.player.PlayerModelPart;
+import net.minecraft.client.render.entity.PlayerModelPart;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
