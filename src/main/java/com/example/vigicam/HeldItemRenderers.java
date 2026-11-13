@@ -29,6 +29,13 @@ public final class HeldItemRenderers {
     private static final Identifier DRONE_TEX = new Identifier(VigiCam.MOD_ID, "textures/entity/drone.png");
     private static DroneModel droneModel;
 
+    private static final Identifier REMOTE_TEX = new Identifier(VigiCam.MOD_ID, "textures/entity/remote_control.png");
+    private static GeoModel remoteModel;
+    /** Centro do corpo do controle no modelo (px): x=0, y entre base (0) e topo do corpo (10), z do meio da espessura. */
+    private static final float REMOTE_CY = 5f, REMOTE_CZ = 0.2f;
+    /** Tamanho do controle nas duas mãos, em blocos por pixel do modelo (13 px de largura): 1ª pessoa ~0,66 bloco; 3ª pessoa usa a escala 0.6 do display. */
+    public static final float REMOTE_PX_FIRST_PERSON = 0.66f / 13f, REMOTE_PX_THIRD_PERSON = 0.6f / 16f;
+
     // ------------------------------------------------------------------ drone (modelo 3D, rotores girando)
 
     /**
@@ -68,6 +75,40 @@ public final class HeldItemRenderers {
         m.pop();
     }
 
+    // ------------------------------------------------------------------ controle remoto (modelo 3D)
+
+    private static void renderRemote(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
+        if (remoteModel == null) remoteModel = new GeoModel("/assets/vigicam/geo/remote_control.geo.json");
+        VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(REMOTE_TEX));
+        remoteModel.render(m, vc, light, overlay, 0f);
+    }
+
+    /**
+     * Mesmo quadro do GeckoLib (veja o drone) para os contextos sem os braços: GUI, chão, moldura, cabeça, prateleira
+     * e quem segura sem ser o jogador. Posição/escala/rotação vêm só do "display" do JSON.
+     */
+    public static void remote(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
+        m.push();
+        m.translate(0.5, 0.51, 0.5);
+        m.scale(1f / 16f, 1f / 16f, 1f / 16f);
+        renderRemote(m, vcp, light, overlay);
+        m.pop();
+    }
+
+    /**
+     * Controle nas duas mãos (o encaixe dos braços não passa pelo display): centro do corpo na origem, em "quadro de item em pé"
+     * (+X direita do jogador, +Y cima, +Z para o rosto do jogador). A tela fica no lado -Z do modelo, então ele é girado 180° em Y.
+     * @param pxScale blocos por pixel do modelo
+     */
+    public static void remoteHeld(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay, float pxScale) {
+        m.push();
+        m.scale(pxScale, pxScale, pxScale);
+        m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f));
+        m.translate(0.0, -REMOTE_CY, -REMOTE_CZ);
+        renderRemote(m, vcp, light, overlay);
+        m.pop();
+    }
+
     // ------------------------------------------------------------------ controle remoto (1ª pessoa: com as duas mãos)
 
     /** Controle seguro pelas pontas, com as duas mãos do jogador (primeira pessoa). */
@@ -81,10 +122,7 @@ public final class HeldItemRenderers {
         m.translate(right ? -0.56 : 0.56, 0.12, 0.10);
         m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-28f));
 
-        m.push();
-        m.scale(0.66f, 0.66f, 0.66f);
-        mc.getItemRenderer().renderItem(stack, ModelTransformationMode.GUI, light, overlay, m, vcp, mc.world, 0);
-        m.pop();
+        remoteHeld(m, vcp, light, overlay, REMOTE_PX_FIRST_PERSON);
 
         if (mc.player != null && !mc.player.isInvisible()
                 && mc.getEntityRenderDispatcher().getRenderer(mc.player) instanceof PlayerEntityRenderer pr) {

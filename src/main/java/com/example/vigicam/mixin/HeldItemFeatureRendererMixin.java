@@ -1,7 +1,9 @@
 package com.example.vigicam.mixin;
 
+import com.example.vigicam.HeldItemRenderers;
 import com.example.vigicam.RemoteItem;
 import net.minecraft.client.model.ModelPart;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.feature.FeatureRenderer;
 import net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer;
@@ -41,8 +43,7 @@ public abstract class HeldItemFeatureRendererMixin {
         matrices.translate(cx / 16f, cy / 16f, cz / 16f);
         matrices.scale(-1f, -1f, 1f);   // do quadro do modelo (Y para baixo) para o quadro "em pé" do item
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-30f));   // tela virada para o rosto, topo para longe
-        matrices.scale(0.62f, 0.62f, 0.62f);
-        heldItemRenderer.renderItem(entity, stack, ModelTransformationMode.GUI, false, matrices, vcp, light);
+        HeldItemRenderers.remoteHeld(matrices, vcp, light, OverlayTexture.DEFAULT_UV, HeldItemRenderers.REMOTE_PX_THIRD_PERSON);
         matrices.pop();
         ci.cancel();
     }
