@@ -72,6 +72,7 @@ public class VigiCam implements ModInitializer {
     @Override
     public void onInitialize() {
         org.slf4j.LoggerFactory.getLogger("VigiCam").info("VigiCam - feito pela equipe Scute60");
+        ModSounds.init();
         Identifier id = new Identifier(MOD_ID, "surveillance_camera");
         Registry.register(Registries.BLOCK, id, SURVEILLANCE_CAMERA);
         Registry.register(Registries.ITEM, id, SURVEILLANCE_CAMERA_ITEM);

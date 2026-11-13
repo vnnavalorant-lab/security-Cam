@@ -85,7 +85,11 @@ public final class HeldItemRenderers {
         m.scale(1f / 16f, 1f / 16f, 1f / 16f);
         GeoModel model = AntennaBlockEntityRenderer.model();
         model.render(m, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(AntennaBlockEntityRenderer.TEXTURE)), light, overlay, 0f);
+        model.renderHull(m, vcp.getBuffer(RenderLayer.getEntityCutout(AntennaBlockEntityRenderer.TEXTURE)), light, overlay, 0f,
+                255, 255, 255, 255);
         model.render(m, vcp.getBuffer(RenderLayer.getEyes(AntennaBlockEntityRenderer.GLOW)), 0xF000F0, overlay, 0f,
+                255, 255, 255, (int) (255 * pulse));
+        model.renderHull(m, vcp.getBuffer(RenderLayer.getEyes(AntennaBlockEntityRenderer.GLOW)), 0xF000F0, overlay, 0f,
                 255, 255, 255, (int) (255 * pulse));
         m.pop();
     }

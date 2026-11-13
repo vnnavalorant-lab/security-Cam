@@ -63,6 +63,7 @@ public class AmplifyingAntennaBlockEntity extends BlockEntity {
 
     /** Partículas de sinal (só o cliente chama; o desenho está em SignalParticle). */
     public static void clientTick(World world, BlockPos pos, BlockState state, AmplifyingAntennaBlockEntity be) {
+        VigiSounds.antennaTick(pos, world.getTime());   // som ambiente em looping
         boolean active = state.get(AmplifyingAntennaBlock.ACTIVE);
         long t = world.getTime();
         double cx = pos.getX() + 0.5, cz = pos.getZ() + 0.5;

@@ -68,7 +68,7 @@ public class VigiCamClient implements ClientModInitializer {
             boolean on = buf.readBoolean();
             client.execute(() -> PilotState.set(who, on));
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PilotState.clear());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> { PilotState.clear(); VigiSounds.reset(); });
 
         EntityModelLayerRegistry.registerModelLayer(DroneModel.LAYER, DroneModel::getTexturedModelData);
         EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);

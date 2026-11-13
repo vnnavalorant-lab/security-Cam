@@ -30,6 +30,7 @@ public final class GeoModel {
         final float[] p = new float[12];   // 4 vértices (x,y,z)
         final float[] uv = new float[8];   // 4 vértices (u,v) já normalizados
         float nx, ny, nz;
+        boolean hull;   // cubo com from/to invertidos (nº ímpar de eixos): faces viradas para dentro, como no Blockbench
     }
 
     private static final class Group {
@@ -77,6 +78,10 @@ public final class GeoModel {
         float[] o = floats(c.getAsJsonArray("origin"));
         float[] rot = c.has("rotation") ? floats(c.getAsJsonArray("rotation")) : new float[3];
         float inf = c.has("inflate") ? c.get("inflate").getAsFloat() : 0f;
+        // from > to em um nº ímpar de eixos = cubo "espelhado": o Blockbench o mostra com as faces para dentro
+        // (casca invertida, usada nos contornos dos LEDs). Mantemos esse comportamento.
+        int swapped = (from[0] > to[0] ? 1 : 0) + (from[1] > to[1] ? 1 : 0) + (from[2] > to[2] ? 1 : 0);
+        boolean hull = (swapped & 1) == 1;
         float x0 = from[0] - inf, y0 = from[1] - inf, z0 = from[2] - inf;
         float x1 = to[0] + inf, y1 = to[1] + inf, z1 = to[2] + inf;
 
@@ -94,6 +99,7 @@ public final class GeoModel {
             }
             float[] uv = floats(face.getValue().getAsJsonArray());
             Quad q = new Quad();
+            q.hull = hull;
             for (int i = 0; i < 4; i++) {
                 float[] p = rotate(v[i][0] - o[0], v[i][1] - o[1], v[i][2] - o[2], rot);
                 q.p[i * 3] = p[0] + o[0];
@@ -142,11 +148,20 @@ public final class GeoModel {
     /** Igual ao anterior, com cor/alpha por vértice (0-255): usado nas camadas brilhantes (LEDs) que pulsam. */
     public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw,
                        int r, int gr, int b, int a) {
-        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a);
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, false);
+    }
+
+    /**
+     * Desenha SÓ os cubos de casca invertida (contornos). Precisa de um RenderLayer COM culling de faces
+     * (ex.: entityCutout / eyes): assim só aparecem as paredes de trás, formando o contorno em volta da peça vermelha.
+     */
+    public void renderHull(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw,
+                           int r, int gr, int b, int a) {
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, true);
     }
 
     private void renderGroup(Group g, MatrixStack m, VertexConsumer vc, int light, int overlay, float rootYaw,
-                             int cr, int cg, int cb, int ca) {
+                             int cr, int cg, int cb, int ca, boolean hullPass) {
         m.push();
         if (ROOT.equals(g.name)) {
             m.translate(g.px, g.py, g.pz);
@@ -157,6 +172,7 @@ public final class GeoModel {
         Matrix4f pos = e.getPositionMatrix();
         Matrix3f nrm = e.getNormalMatrix();
         for (Quad q : g.quads) {
+            if (q.hull != hullPass) continue;
             for (int i = 0; i < 4; i++) {
                 vc.vertex(pos, q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2])
                         .color(cr, cg, cb, ca)
@@ -167,7 +183,7 @@ public final class GeoModel {
                         .next();
             }
         }
-        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw, cr, cg, cb, ca);
+        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw, cr, cg, cb, ca, hullPass);
         m.pop();
     }
 }

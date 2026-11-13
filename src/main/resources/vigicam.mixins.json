@@ -14,6 +14,7 @@
     "ItemRendererMixin",
     "KeyboardInputMixin",
     "MinecraftClientMixin",
+    "MouseMixin",
     "PlayerEntityModelMixin",
     "PostEffectProcessorMixin",
     "WorldRendererAccessor",

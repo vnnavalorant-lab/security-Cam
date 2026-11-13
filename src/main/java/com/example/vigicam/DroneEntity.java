@@ -379,6 +379,7 @@ public class DroneEntity extends Entity {
     }
 
     private void clientTick() {
+        VigiSounds.droneTick(this);   // zumbido em looping enquanto voa
         if (lerpSteps > 0) {
             double nx = this.getX() + (lerpX - this.getX()) / lerpSteps;
             double ny = this.getY() + (lerpY - this.getY()) / lerpSteps;

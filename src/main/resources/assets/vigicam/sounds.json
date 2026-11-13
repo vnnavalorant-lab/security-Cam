@@ -1,0 +1,6 @@
+{
+  "drone_fly":     { "sounds": [ { "name": "vigicam:drone_fly",     "stream": false, "attenuation_distance": 20 } ] },
+  "antenna":       { "sounds": [ { "name": "vigicam:antena",        "stream": false, "attenuation_distance": 16 } ] },
+  "camera":        { "sounds": [ { "name": "vigicam:camera",        "stream": false, "attenuation_distance": 12 } ] },
+  "press_control": { "sounds": [ { "name": "vigicam:press_control", "stream": false } ] }
+}

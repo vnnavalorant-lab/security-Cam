@@ -5,6 +5,8 @@ import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntityTicker;
+import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.HorizontalFacingBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.player.PlayerEntity;
@@ -19,6 +21,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 public class SurveillanceCameraBlock extends HorizontalFacingBlock implements BlockEntityProvider {
     // o modelo ocupa 6px de largura e vai de uma extremidade do bloco à outra (base encostada na extremidade oposta à lente)
@@ -69,5 +72,14 @@ public class SurveillanceCameraBlock extends HorizontalFacingBlock implements Bl
             }
         }
         return ActionResult.SUCCESS;
+    }
+
+    @Nullable
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(World world, BlockState state, BlockEntityType<T> type) {
+        if (!world.isClient || type != VigiCam.CAMERA_BE) return null;   // só o cliente precisa (som em looping)
+        BlockEntityTicker<SurveillanceCameraBlockEntity> ticker = SurveillanceCameraBlockEntity::clientTick;
+        return (BlockEntityTicker<T>) ticker;
     }
 }

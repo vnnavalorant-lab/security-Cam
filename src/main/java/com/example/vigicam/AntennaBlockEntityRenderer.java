@@ -45,10 +45,15 @@ public class AntennaBlockEntityRenderer implements BlockEntityRenderer<Amplifyin
         matrices.scale(1f / 16f, 1f / 16f, 1f / 16f);
 
         model().render(matrices, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(TEXTURE)), light, OverlayTexture.DEFAULT_UV, 0f);
+        // contornos (cascas invertidas do .bbmodel): layer COM culling, só as paredes de trás aparecem
+        model().renderHull(matrices, vcp.getBuffer(RenderLayer.getEntityCutout(TEXTURE)), light, OverlayTexture.DEFAULT_UV, 0f,
+                255, 255, 255, 255);
 
         // LEDs: pulsam devagar; com o drone ligado piscam rápido (transmitindo)
         float pulse = active ? 0.7f + 0.3f * MathHelper.sin(time * 0.9f) : 0.55f + 0.35f * MathHelper.sin(time * 0.2f);
         model().render(matrices, vcp.getBuffer(RenderLayer.getEyes(GLOW)), FULL_BRIGHT, OverlayTexture.DEFAULT_UV, 0f,
+                255, 255, 255, (int) (255 * MathHelper.clamp(pulse, 0f, 1f)));
+        model().renderHull(matrices, vcp.getBuffer(RenderLayer.getEyes(GLOW)), FULL_BRIGHT, OverlayTexture.DEFAULT_UV, 0f,
                 255, 255, 255, (int) (255 * MathHelper.clamp(pulse, 0f, 1f)));
         matrices.pop();
     }
