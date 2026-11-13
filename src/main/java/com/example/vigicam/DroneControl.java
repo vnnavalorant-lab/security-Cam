@@ -50,6 +50,8 @@ public final class DroneControl {
 
     public static Input input(UUID player) { return INPUTS.get(player); }
 
+    public static DroneEntity get(UUID player) { return CONTROLLING.get(player); }
+
     public static void clear() {
         INPUTS.clear();
         CONTROLLING.clear();

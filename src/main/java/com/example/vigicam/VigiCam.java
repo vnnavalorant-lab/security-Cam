@@ -21,6 +21,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.BlockSoundGroup;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
@@ -73,7 +74,13 @@ public class VigiCam implements ModInitializer {
             server.execute(() -> DroneControl.update(player, forward, strafe, vertical, yaw, pitch));
         });
         ServerPlayNetworking.registerGlobalReceiver(DRONE_RELEASE, (server, player, handler, buf, sender) ->
-                server.execute(() -> DroneControl.release(player.getUuid())));
+                server.execute(() -> {
+                    DroneEntity d = DroneControl.get(player.getUuid());
+                    DroneControl.release(player.getUuid());
+                    if (d != null && d.getHome() != null) {
+                        player.sendMessage(Text.literal("§eDrone retornando à base..."), true);
+                    }
+                }));
         ServerPlayNetworking.registerGlobalReceiver(CYCLE_DEVICE, (server, player, handler, buf, sender) ->
                 server.execute(() -> RemoteItem.cycle(player)));
 

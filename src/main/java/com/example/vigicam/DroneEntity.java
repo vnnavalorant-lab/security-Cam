@@ -20,6 +20,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -37,8 +38,18 @@ public class DroneEntity extends Entity {
     private static final TrackedData<Boolean> POWERED =
             DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
+    private static final double RETURN_SPEED = 0.25;   // velocidade de volta à base (blocos/tick)
+
     @Nullable private UUID controller;
     private Vec3d vel = Vec3d.ZERO;
+
+    // base: onde o drone foi colocado no chão pela última vez
+    @Nullable private Vec3d home;
+    // estado do retorno automático (servidor)
+    private boolean landing, gaveUp;
+    private double cruiseY = -1;
+    private int cruiseBoost, stuckCount;
+    @Nullable private Vec3d stuckPos;
 
     // cliente: interpolação e inclinação visual
     private int lerpSteps;
@@ -59,14 +70,40 @@ public class DroneEntity extends Entity {
     private void setPowered(boolean v) { this.dataTracker.set(POWERED, v); }
 
     @Nullable public UUID getController() { return controller; }
-    public void setController(UUID id) { this.controller = id; setPowered(true); }
-    public void clearController() { this.controller = null; }
+    public void setController(UUID id) {
+        this.controller = id;
+        if (home == null && this.isOnGround()) home = this.getPos();   // drone antigo/sem base: usa onde está
+        resetReturn();
+        setPowered(true);
+    }
+    public void clearController() { this.controller = null; resetReturn(); }
+
+    @Nullable public Vec3d getHome() { return home; }
+    public void setHome(Vec3d h) { this.home = h; }
+
+    private void resetReturn() {
+        landing = false;
+        gaveUp = false;
+        cruiseY = -1;
+        cruiseBoost = 0;
+        stuckCount = 0;
+        stuckPos = null;
+    }
 
     @Override
-    protected void readCustomDataFromNbt(NbtCompound nbt) {}
+    protected void readCustomDataFromNbt(NbtCompound nbt) {
+        if (nbt.getBoolean("HasHome")) home = new Vec3d(nbt.getDouble("HomeX"), nbt.getDouble("HomeY"), nbt.getDouble("HomeZ"));
+    }
 
     @Override
-    protected void writeCustomDataToNbt(NbtCompound nbt) {}
+    protected void writeCustomDataToNbt(NbtCompound nbt) {
+        if (home != null) {
+            nbt.putBoolean("HasHome", true);
+            nbt.putDouble("HomeX", home.x);
+            nbt.putDouble("HomeY", home.y);
+            nbt.putDouble("HomeZ", home.z);
+        }
+    }
 
     @Override
     public Packet<ClientPlayPacketListener> createSpawnPacket() {
@@ -160,7 +197,7 @@ public class DroneEntity extends Entity {
             this.setYaw(in.yaw());
             this.setPitch(in.pitch());
         } else if (powered) {
-            vel = vel.lerp(new Vec3d(0, -LAND_SPEED, 0), ACCEL);   // sem piloto: pousa devagar
+            vel = vel.lerp(returnVelocity(), ACCEL);   // sem piloto: volta para a base e pousa
         } else {
             vel = new Vec3d(vel.x * 0.5, Math.max(vel.y - 0.04, -1.0), vel.z * 0.5);   // desligado: cai
         }
@@ -185,9 +222,74 @@ public class DroneEntity extends Entity {
         this.fallDistance = 0f;
 
         if (in == null && powered && this.isOnGround()) {
-            setPowered(false);
-            vel = Vec3d.ZERO;
+            boolean atHome = home == null || landing || gaveUp
+                    || Math.hypot(home.x - this.getX(), home.z - this.getZ()) < 1.0;
+            if (atHome) {
+                setPowered(false);
+                vel = Vec3d.ZERO;
+                resetReturn();
+            }
         }
+    }
+
+    /**
+     * Retorno seguro: sobe até uma altitude acima do relevo da rota, voa até cima da base e desce na vertical.
+     * Se ficar preso (teto, parede), tenta subir mais; se mesmo assim não sair do lugar, faz um pouso de emergência.
+     */
+    private Vec3d returnVelocity() {
+        Vec3d pos = this.getPos();
+        if (gaveUp || home == null) return new Vec3d(0, -LAND_SPEED, 0);
+
+        double dx = home.x - pos.x, dz = home.z - pos.z;
+        double horiz = Math.hypot(dx, dz);
+        if (horiz < 0.6) landing = true; else if (horiz > 3.0) landing = false;
+        if (landing) return new Vec3d(dx * 0.2, -LAND_SPEED, dz * 0.2);   // desce centralizando na base
+
+        if (cruiseY < 0 || this.age % 10 == 0) cruiseY = computeCruise(pos, horiz);
+        double dy = cruiseY - pos.y;
+        double vy = MathHelper.clamp(dy * 0.25, -V_SPEED, V_SPEED);
+        double sh = dy > 1.0 ? 0.0 : Math.max(0.08, Math.min(RETURN_SPEED, horiz * 0.08));   // só avança na altitude de cruzeiro
+        double nx = dx / horiz, nz = dz / horiz;
+
+        if (sh > 0) {   // aponta o nariz para onde está indo
+            float target = (float) Math.toDegrees(Math.atan2(-dx, dz));
+            this.setYaw(this.getYaw() + MathHelper.clamp(MathHelper.wrapDegrees(target - this.getYaw()), -8f, 8f));
+        }
+        this.setPitch(this.getPitch() * 0.9f);
+
+        if (this.age % 20 == 0) {   // detecta se travou
+            if (stuckPos != null && pos.squaredDistanceTo(stuckPos) < 0.25) {
+                stuckCount++;
+                if (stuckCount >= 4) gaveUp = true;
+                else { cruiseBoost = Math.min(cruiseBoost + 4, 12); cruiseY = -1; }
+            } else {
+                stuckCount = 0;
+            }
+            stuckPos = pos;
+        }
+        return new Vec3d(nx * sh, vy, nz * sh);
+    }
+
+    /** Altitude segura: acima do ponto mais alto (com folga lateral) entre o drone e a base. */
+    private double computeCruise(Vec3d pos, double horiz) {
+        World w = this.getWorld();
+        if (w.getDimension().hasCeiling()) return Math.max(home.y + 1.5, pos.y);   // Nether etc.: sem mapa de altura útil
+        ServerWorld sw = (ServerWorld) w;
+        int n = (int) Math.min(64, Math.ceil(horiz / 2.0) + 1);
+        int top = (int) Math.floor(home.y);
+        for (int i = 0; i <= n; i++) {
+            double t = i / (double) n;
+            int bx = (int) Math.floor(pos.x + (home.x - pos.x) * t);
+            int bz = (int) Math.floor(pos.z + (home.z - pos.z) * t);
+            for (int ox = -1; ox <= 1; ox++) {
+                for (int oz = -1; oz <= 1; oz++) {
+                    int x = bx + ox, z = bz + oz;
+                    if (!sw.getChunkManager().isChunkLoaded(x >> 4, z >> 4)) continue;
+                    top = Math.max(top, sw.getTopY(Heightmap.Type.MOTION_BLOCKING, x, z));
+                }
+            }
+        }
+        return Math.min(top + 2.5 + cruiseBoost, sw.getTopY() - 2);
     }
 
     private void clientTick() {

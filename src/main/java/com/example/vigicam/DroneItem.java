@@ -5,6 +5,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.server.world.ServerWorld;
 
@@ -22,6 +23,7 @@ public class DroneItem extends Item {
         DroneEntity drone = VigiCam.DRONE.create(sw);
         if (drone == null) return ActionResult.FAIL;
         drone.refreshPositionAndAngles(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, ctx.getPlayerYaw(), 0f);
+        drone.setHome(new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));   // base de retorno
         sw.spawnEntity(drone);
 
         PlayerEntity player = ctx.getPlayer();

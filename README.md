@@ -24,7 +24,8 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 **Drone** (`vigicam:drone`, receita: 4 penas, 2 ferros, 1 câmera, 1 redstone)
 - Clique direito num bloco para colocar. Clique direito com a **mão vazia** para pilotar; Shift + clique direito (mão vazia) ou bater nele para recolher.
 - Pilotagem: **WASD** move, **Espaço** sobe, **Ctrl** desce, o mouse gira o drone/câmera, **Shift** sai. Alcance de 96 blocos.
-- Sem piloto ele pousa sozinho (rotores param). Os rotores giram 4 voltas/s (animação `on` do Blockbench).
+- Ao sair da pilotagem ele **volta sozinho para a base** (o lugar onde foi colocado no chão pela última vez): sobe acima do relevo da rota, voa até cima da base e desce na vertical. Se ficar preso, tenta subir mais e, em último caso, faz um pouso de emergência. Rotores param ao pousar.
+- As câmeras e o drone enxergam todos os jogadores, inclusive você mesmo. Os rotores giram 4 voltas/s (animação `on` do Blockbench).
 - Mesmos shaders da câmera: **V** alterna visão noturna/térmica. Telemetria (ALT/DIST/VEL/sinal) no HUD.
 
 **Controle remoto** (`vigicam:remote`, receita: tocha de redstone, 7 ferros, redstone)

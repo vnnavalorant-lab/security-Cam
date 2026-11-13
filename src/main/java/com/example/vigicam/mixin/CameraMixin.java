@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -24,5 +25,11 @@ public abstract class CameraMixin {
             setPos(p.x, p.y, p.z);
             setRotation(CameraViewClient.getYaw(tickDelta), CameraViewClient.getPitch(tickDelta));
         }
+    }
+
+    // trata a visão como "terceira pessoa": assim o próprio jogador (que está longe da câmera) também é desenhado
+    @Inject(method = "isThirdPerson", at = @At("HEAD"), cancellable = true)
+    private void vigicam$showSelf(CallbackInfoReturnable<Boolean> cir) {
+        if (CameraViewClient.isActive()) cir.setReturnValue(true);
     }
 }

@@ -167,7 +167,7 @@ public class VigiCamClient implements ClientModInitializer {
 
         List<Entity> found = mc.world.getOtherEntities(null,
                 Box.of(cam, SCAN_RANGE * 2, SCAN_RANGE * 2, SCAN_RANGE * 2),
-                e -> (e instanceof LivingEntity || e instanceof DroneEntity) && e.isAlive() && e != mc.player
+                e -> (e instanceof LivingEntity || e instanceof DroneEntity) && e.isAlive()
                         && !CameraViewClient.isDrone(e.getId())
                         && e.squaredDistanceTo(cam) <= SCAN_RANGE * SCAN_RANGE);
         found.sort(Comparator.comparingDouble(e -> e.squaredDistanceTo(cam)));
