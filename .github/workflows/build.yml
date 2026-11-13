@@ -10,9 +10,16 @@ on:
 permissions:
   contents: write
 
+# Cancela builds antigos da mesma branch quando você faz um push novo
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Se travar, falha em 25 min em vez de ficar rodando
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,15 +42,17 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ hashFiles('**/gradlew') == '' && '8.8' || '' }}
+          # Só a branch principal grava cache; as demais só leem (upload do cache do Loom é lento)
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
       - name: Build
         working-directory: ${{ steps.proj.outputs.dir }}
         run: |
           if [ -f ./gradlew ]; then
             chmod +x ./gradlew
-            ./gradlew clean build --stacktrace
+            ./gradlew build --stacktrace
           else
-            gradle clean build --stacktrace
+            gradle build --stacktrace
           fi
 
       - name: Verificar o jar
