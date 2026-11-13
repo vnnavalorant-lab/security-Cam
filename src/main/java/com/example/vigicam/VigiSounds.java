@@ -87,7 +87,7 @@ public final class VigiSounds {
         DroneLoop s = DRONE_LOOPS.get(d.getId());
         if (d.isRemoved() || !d.isPowered()) {
             if (s != null) {
-                s.setDone();
+                s.finish();
                 sm.stop(s);
                 DRONE_LOOPS.remove(d.getId());
             }
@@ -117,6 +117,9 @@ public final class VigiSounds {
             this.y = drone.getY();
             this.z = drone.getZ();
         }
+
+        /** setDone() é protegido: este método deixa a classe de fora encerrar o loop. */
+        void finish() { setDone(); }
 
         @Override
         public void tick() {
