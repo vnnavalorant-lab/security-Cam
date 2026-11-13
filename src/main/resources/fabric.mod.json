@@ -2,9 +2,15 @@
   "schemaVersion": 1,
   "id": "vigicam",
   "version": "${version}",
-  "name": "VigiCam",
-  "description": "Câmera de segurança: ao ver pela câmera, o shader (visão noturna + VHS + fisheye) ativa durante o uso.",
-  "authors": ["Você"],
+  "name": "Aegis - Scute60",
+  "description": "Câmera de segurança: ao ver pela câmera, o shader (visão noturna + VHS + fisheye) ativa durante o uso. Feito pela equipe Scute60.",
+  "authors": [
+    { "name": "Scute60", "contact": { "homepage": "https://x.com/Scute6o" } }
+  ],
+  "contact": {
+    "homepage": "https://x.com/Scute6o"
+  },
+  "icon": "assets/vigicam/icon.png",
   "license": "MIT",
   "environment": "*",
   "entrypoints": {

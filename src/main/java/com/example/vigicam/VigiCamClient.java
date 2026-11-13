@@ -135,9 +135,19 @@ public class VigiCamClient implements ClientModInitializer {
         mc.gameRenderer.disablePostProcessor();
         CameraViewClient.stop(mc);
         targets.clear();
+        if (mc.player != null) {
+            mc.inGameHud.setOverlayMessage(net.minecraft.text.Text.literal("Transmissão encerrada · Scute60"), false);
+            farewellTicks = 20;   // some depois de 1 segundo
+        }
     }
 
+    /** Ticks restantes até apagar a mensagem de despedida da action bar (0 = nada a apagar). */
+    private static int farewellTicks;
+
     private static void tick(MinecraftClient mc) {
+        if (farewellTicks > 0 && --farewellTicks == 0) {
+            mc.inGameHud.setOverlayMessage(net.minecraft.text.Text.empty(), false);
+        }
         if (!CameraViewClient.isActive()) {
             while (toggleKey.wasPressed()) { /* descarta */ }
             while (manualKey.wasPressed()) { /* descarta */ }
