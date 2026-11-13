@@ -47,7 +47,7 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 ## Antena Amplificadora
 
 - **Dono:** quem coloca a antena é o dono. Só os drones pilotados por ele recebem o sinal ampliado (clique direito na antena mostra o dono).
-- **Alcance:** o drone normalmente voa até 96 blocos do piloto. Com uma antena do piloto a até 64 blocos do drone **ou** do piloto, o alcance sobe **+50 blocos** (146). A barra de sinal do HUD usa o alcance real e mostra `▲ ANTENA +50 m`.
-- **Perda de sinal:** se a antena deixar de cobrir o drone (piloto se afasta, antena quebrada), o controle é solto, o jogador sai da visão do drone e ele **volta sozinho para a base** de onde saiu (o retorno automático não depende de sinal).
+- **Alcance:** o drone normalmente voa até 96 blocos do piloto. A antena do piloto é um segundo transmissor: o alcance dela é 96 + **50 blocos contados a partir da antena** (146). O drone pode voar em qualquer ponto dentro de 96 blocos do piloto **ou** de 146 blocos da antena. A barra de sinal do HUD usa o melhor dos dois e mostra `▲ ANTENA +50 m`.
+- **Perda de sinal:** se o drone ficar fora do alcance do piloto e da antena (antena quebrada ou longe demais), o controle é solto, o jogador sai da visão do drone e ele **volta sozinho para a base** de onde saiu (o retorno automático não depende de sinal).
 - **Efeitos:** ondas de rádio (anéis de brilho aditivo que se expandem da ponta e do meio do mastro), halo pulsante, faíscas de dados e LEDs vermelhos emissivos pulsando. Com um drone usando a antena (`active=true`) tudo fica mais rápido/intenso e o bloco emite mais luz.
 - Receita: pára-raios + bloco de redstone + 5 barras de ferro.

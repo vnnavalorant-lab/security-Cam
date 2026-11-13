@@ -38,15 +38,19 @@ public class DroneEntity extends Entity {
 
     private static final TrackedData<Boolean> POWERED =
             DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
-    /** Alcance de sinal atual (96, ou 96 + 50 com antena do piloto por perto): o cliente usa na barra de sinal. */
-    private static final TrackedData<Float> SIGNAL_RANGE =
+    /** Força do sinal (0..1) para a barra do HUD, e se a antena do piloto está dando sinal ao drone. */
+    private static final TrackedData<Float> SIGNAL =
             DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.FLOAT);
+    private static final TrackedData<Boolean> AMPLIFIED =
+            DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
 
     private static final double RETURN_SPEED = 0.25;   // velocidade de volta à base (blocos/tick)
 
     @Nullable private UUID controller;
     private Vec3d vel = Vec3d.ZERO;
-    private boolean amplified;   // servidor: há uma antena do piloto dando sinal
+    private boolean amplified;   // servidor: há uma antena do piloto perto DO DRONE dando sinal
+    /** Centro da antena que cobre o drone: o alcance ampliado (96 + 50) conta a partir dela. */
+    @Nullable private Vec3d ampCenter;
 
     // base: onde o drone foi colocado no chão pela última vez
     @Nullable private Vec3d home;
@@ -69,12 +73,17 @@ public class DroneEntity extends Entity {
     @Override
     protected void initDataTracker() {
         this.dataTracker.startTracking(POWERED, false);
-        this.dataTracker.startTracking(SIGNAL_RANGE, (float) RANGE);
+        this.dataTracker.startTracking(SIGNAL, 1f);
+        this.dataTracker.startTracking(AMPLIFIED, false);
     }
 
-    /** Alcance de sinal em vigor (blocos): {@link #RANGE}, mais o bônus da antena quando ela está dando sinal. */
-    public float getSignalRange() { return this.dataTracker.get(SIGNAL_RANGE); }
-    public boolean isAmplified() { return getSignalRange() > RANGE + 1.0f; }
+    public float getSignalStrength() { return this.dataTracker.get(SIGNAL); }
+    public boolean isAmplified() { return this.dataTracker.get(AMPLIFIED); }
+
+    private void setSignal(float v, boolean amp) {
+        if (Math.abs(v - this.dataTracker.get(SIGNAL)) > 0.01f) this.dataTracker.set(SIGNAL, v);
+        if (amp != this.dataTracker.get(AMPLIFIED)) this.dataTracker.set(AMPLIFIED, amp);
+    }
 
     public boolean isPowered() { return this.dataTracker.get(POWERED); }
     private void setPowered(boolean v) { this.dataTracker.set(POWERED, v); }
@@ -89,7 +98,8 @@ public class DroneEntity extends Entity {
     public void clearController() {
         this.controller = null;
         this.amplified = false;
-        this.dataTracker.set(SIGNAL_RANGE, (float) RANGE);
+        this.ampCenter = null;
+        setSignal(1f, false);
         resetReturn();
     }
 
@@ -217,21 +227,44 @@ public class DroneEntity extends Entity {
             vel = new Vec3d(vel.x * 0.5, Math.max(vel.y - 0.04, -1.0), vel.z * 0.5);   // desligado: cai
         }
 
-        if (pilot != null) {   // antena do piloto por perto: +50 blocos de alcance
+        if (pilot != null) {
             if (this.age % 5 == 0) updateAntenna(pilot);
-            double range = RANGE + (amplified ? AntennaNetwork.RANGE_BONUS : 0.0);
-            Vec3d off = this.getPos().subtract(pilot.getPos());
+            Vec3d pos = this.getPos();
+            Vec3d off = pos.subtract(pilot.getPos());
             double dist = off.length();
-            if (dist > range + SIGNAL_LOSS_MARGIN) {
-                // a antena deixou de cobrir o drone (piloto se afastou / antena destruída): sinal perdido.
-                // O retorno à base não depende do sinal, então ele volta sozinho de onde estiver.
-                loseSignal(pilot);
-                pilot = null;
-                in = null;
-            } else if (dist > range) {   // limite de alcance do sinal
-                Vec3d out = off.normalize();
-                double v = vel.dotProduct(out);
-                if (v > 0) vel = vel.subtract(out.multiply(v));
+            double fromAnt = ampCenter != null ? pos.distanceTo(ampCenter) : Double.MAX_VALUE;
+            float sig = (float) Math.max(0.0, 1.0 - dist / RANGE);
+            if (amplified && ampCenter != null) {
+                // a antena é um segundo transmissor: o alcance dela (96 + 50) conta A PARTIR DA ANTENA
+                sig = Math.max(sig, (float) Math.max(0.0, 1.0 - fromAnt / AntennaNetwork.COVERAGE));
+            }
+            setSignal(sig, amplified);
+
+            boolean inPilotRange = dist <= RANGE;
+            boolean inAntennaRange = amplified && ampCenter != null && fromAnt <= AntennaNetwork.COVERAGE;
+            if (!inPilotRange && !inAntennaRange) {
+                if (dist > RANGE + SIGNAL_LOSS_MARGIN && fromAnt > AntennaNetwork.COVERAGE + SIGNAL_LOSS_MARGIN) {
+                    // fora do alcance do piloto e da antena (antena quebrada / drone longe dela): sinal perdido.
+                    // O retorno à base não depende do sinal, então ele volta sozinho de onde estiver.
+                    loseSignal(pilot);
+                    pilot = null;
+                    in = null;
+                } else if (amplified && ampCenter != null) {   // borda do alcance da antena: não passa daí
+                    Vec3d out = pos.subtract(ampCenter).normalize();
+                    double v = vel.dotProduct(out);
+                    if (v > 0) vel = vel.subtract(out.multiply(v));
+                } else {                                          // borda do alcance normal, sem antena
+                    Vec3d out = off.normalize();
+                    double v = vel.dotProduct(out);
+                    if (v > 0) vel = vel.subtract(out.multiply(v));
+                }
+            } else if (!inPilotRange) {
+                // só a antena cobre: segura a velocidade para fora quando encostar no limite dela
+                if (fromAnt > AntennaNetwork.COVERAGE - 0.5) {
+                    Vec3d out = pos.subtract(ampCenter).normalize();
+                    double v = vel.dotProduct(out);
+                    if (v > 0) vel = vel.subtract(out.multiply(v));
+                }
             }
         }
 
@@ -257,15 +290,16 @@ public class DroneEntity extends Entity {
 
     private static final double SIGNAL_LOSS_MARGIN = 6.0;   // tolerância além do alcance antes de perder o sinal
 
-    /** Procura uma antena DO PILOTO perto do drone ou do piloto e ajusta o alcance. */
+    /** Procura uma antena DO PILOTO que cubra o drone (alcance contado a partir da antena). */
     private void updateAntenna(ServerPlayerEntity pilot) {
         ServerWorld sw = (ServerWorld) this.getWorld();
-        AmplifyingAntennaBlockEntity ant = AntennaNetwork.find(sw, pilot.getUuid(), this.getPos(), pilot.getPos());
+        AmplifyingAntennaBlockEntity ant = AntennaNetwork.find(sw, pilot.getUuid(), this.getPos());
+        ampCenter = ant != null ? Vec3d.ofCenter(ant.getPos()) : ampCenter;
         boolean now = ant != null;
+        if (!now) ampCenter = null;
         if (now) ant.markLinked(sw.getTime());
         if (now != amplified) {
             amplified = now;
-            this.dataTracker.set(SIGNAL_RANGE, (float) (RANGE + (now ? AntennaNetwork.RANGE_BONUS : 0.0)));
             // só avisa quando já está além do alcance normal (evita spam perto do piloto)
             double dist = this.getPos().distanceTo(pilot.getPos());
             if (now) pilot.sendMessage(Text.literal("§aAntena conectada §7· alcance +"
@@ -278,7 +312,8 @@ public class DroneEntity extends Entity {
         DroneControl.release(pilot.getUuid());   // limpa o controle; o drone passa a voltar para a base
         controller = null;
         amplified = false;
-        this.dataTracker.set(SIGNAL_RANGE, (float) RANGE);
+        ampCenter = null;
+        setSignal(0f, false);
         pilot.sendMessage(Text.literal("§cSinal perdido §7· drone retornando à base"), false);
         VigiCam.sendSignalLost(pilot);
     }

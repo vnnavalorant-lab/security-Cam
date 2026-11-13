@@ -22,10 +22,14 @@ import java.util.UUID;
 public final class AntennaNetwork {
     private AntennaNetwork() {}
 
-    /** Raio (blocos) em que a antena é "reconhecida": vale a distância até o drone OU até o piloto. */
-    public static final double DETECT_RADIUS = 64.0;
-    /** Alcance extra de sinal (blocos) que uma antena do dono dá ao drone. */
+    /** Alcance normal do sinal do piloto (blocos). */
+    public static final double BASE_RANGE = DroneEntity.RANGE;
+    /** Blocos extras que a antena dá: o drone voa até BASE_RANGE + RANGE_BONUS de distância DA ANTENA. */
     public static final double RANGE_BONUS = 50.0;
+    /** Raio de cobertura da antena, contado a partir dela. */
+    public static final double COVERAGE = BASE_RANGE + RANGE_BONUS;
+    /** Folga extra na busca, para a antena não "piscar" na borda enquanto o drone é contido. */
+    private static final double FIND_MARGIN = 6.0;
 
     private static final Map<RegistryKey<World>, Set<AmplifyingAntennaBlockEntity>> ANTENNAS = new HashMap<>();
 
@@ -49,21 +53,17 @@ public final class AntennaNetwork {
         if (set != null) set.remove(ant);
     }
 
-    /**
-     * Antena do jogador {@code owner} mais próxima de {@code a} (drone) ou de {@code b} (piloto),
-     * dentro de {@link #DETECT_RADIUS}; null se não houver.
-     */
+    /** Antena do jogador {@code owner} mais próxima do ponto {@code p} (o drone), dentro de {@link #COVERAGE}; null se não houver. */
     @Nullable
-    public static AmplifyingAntennaBlockEntity find(ServerWorld world, UUID owner, Vec3d a, Vec3d b) {
+    public static AmplifyingAntennaBlockEntity find(ServerWorld world, UUID owner, Vec3d p) {
         Set<AmplifyingAntennaBlockEntity> set = ANTENNAS.get(world.getRegistryKey());
         if (set == null || set.isEmpty()) return null;
-        double max = DETECT_RADIUS * DETECT_RADIUS;
+        double max = (COVERAGE + FIND_MARGIN) * (COVERAGE + FIND_MARGIN);
         AmplifyingAntennaBlockEntity best = null;
         double bestD = Double.MAX_VALUE;
         for (AmplifyingAntennaBlockEntity ant : set) {
             if (ant.isRemoved() || !owner.equals(ant.getOwner())) continue;
-            Vec3d c = Vec3d.ofCenter(ant.getPos());
-            double d = Math.min(c.squaredDistanceTo(a), c.squaredDistanceTo(b));
+            double d = Vec3d.ofCenter(ant.getPos()).squaredDistanceTo(p);
             if (d <= max && d < bestD) {
                 bestD = d;
                 best = ant;
