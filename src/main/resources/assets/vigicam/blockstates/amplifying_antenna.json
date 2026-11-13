@@ -1,32 +1,122 @@
 {
   "variants": {
-    "active=false,facing=north": {
+    "active=false,facing=north,part=0": {
       "model": "vigicam:block/amplifying_antenna"
     },
-    "active=false,facing=east": {
+    "active=false,facing=east,part=0": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 90
     },
-    "active=false,facing=south": {
+    "active=false,facing=south,part=0": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 180
     },
-    "active=false,facing=west": {
+    "active=false,facing=west,part=0": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 270
     },
-    "active=true,facing=north": {
+    "active=true,facing=north,part=0": {
       "model": "vigicam:block/amplifying_antenna"
     },
-    "active=true,facing=east": {
+    "active=true,facing=east,part=0": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 90
     },
-    "active=true,facing=south": {
+    "active=true,facing=south,part=0": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 180
     },
-    "active=true,facing=west": {
+    "active=true,facing=west,part=0": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=false,facing=north,part=1": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=false,facing=east,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=false,facing=south,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=false,facing=west,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=true,facing=north,part=1": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=true,facing=east,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=true,facing=south,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=true,facing=west,part=1": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=false,facing=north,part=2": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=false,facing=east,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=false,facing=south,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=false,facing=west,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=true,facing=north,part=2": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=true,facing=east,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=true,facing=south,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=true,facing=west,part=2": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=false,facing=north,part=3": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=false,facing=east,part=3": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=false,facing=south,part=3": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=false,facing=west,part=3": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=true,facing=north,part=3": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=true,facing=east,part=3": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=true,facing=south,part=3": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=true,facing=west,part=3": {
       "model": "vigicam:block/amplifying_antenna",
       "y": 270
     }

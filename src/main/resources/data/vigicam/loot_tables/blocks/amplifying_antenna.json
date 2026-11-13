@@ -12,6 +12,13 @@
       ],
       "conditions": [
         {
+          "condition": "minecraft:block_state_property",
+          "block": "vigicam:amplifying_antenna",
+          "properties": {
+            "part": "0"
+          }
+        },
+        {
           "condition": "minecraft:survives_explosion"
         }
       ]

@@ -53,7 +53,7 @@ public class VigiCam implements ModInitializer {
 
     public static final Block AMPLIFYING_ANTENNA = new AmplifyingAntennaBlock(
             FabricBlockSettings.create().strength(3.0f).sounds(BlockSoundGroup.METAL).nonOpaque()
-                    .luminance(state -> state.get(AmplifyingAntennaBlock.ACTIVE) ? 9 : 4));
+                    .luminance(state -> state.get(AmplifyingAntennaBlock.PART) != 0 ? 0 : (state.get(AmplifyingAntennaBlock.ACTIVE) ? 9 : 4)));
     public static final BlockItem AMPLIFYING_ANTENNA_ITEM =
             new BlockItem(AMPLIFYING_ANTENNA, new FabricItemSettings());
 
