@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["F F", "ICI", "FRF"],
+  "key": {
+    "F": { "item": "minecraft:feather" },
+    "I": { "item": "minecraft:iron_ingot" },
+    "C": { "item": "vigicam:surveillance_camera" },
+    "R": { "item": "minecraft:redstone" }
+  },
+  "result": { "item": "vigicam:drone", "count": 1 }
+}

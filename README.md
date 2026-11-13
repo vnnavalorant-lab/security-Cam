@@ -18,3 +18,19 @@ para enxergar entidades através de paredes troque `XRAY` para `true` em `camera
 4. Coloque o .jar na pasta mods junto com o Fabric API 0.92.x para 1.20.1.
 
 Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
+
+## Drone, controle remoto e câmera manual
+
+**Drone** (`vigicam:drone`, receita: 4 penas, 2 ferros, 1 câmera, 1 redstone)
+- Clique direito num bloco para colocar. Clique direito com a **mão vazia** para pilotar; Shift + clique direito (mão vazia) ou bater nele para recolher.
+- Pilotagem: **WASD** move, **Espaço** sobe, **Ctrl** desce, o mouse gira o drone/câmera, **Shift** sai. Alcance de 96 blocos.
+- Sem piloto ele pousa sozinho (rotores param). Os rotores giram 4 voltas/s (animação `on` do Blockbench).
+- Mesmos shaders da câmera: **V** alterna visão noturna/térmica. Telemetria (ALT/DIST/VEL/sinal) no HUD.
+
+**Controle remoto** (`vigicam:remote`, receita: tocha de redstone, 7 ferros, redstone)
+- Shift + clique direito numa câmera ou drone: vincula/desvincula (até 8).
+- Clique direito no ar: conecta ao dispositivo selecionado, de qualquer distância (dentro da distância de renderização).
+- Dentro da visão, **R** passa para o próximo dispositivo da lista (segure o controle).
+
+**Câmera manual:** dentro de uma câmera fixa, **G** liga o modo manual (você move a visão com o mouse, até ±110° do eixo da câmera);
+**G** de novo volta suavemente para a varredura automática. Todas as teclas são configuráveis em Controles > VigiCam.

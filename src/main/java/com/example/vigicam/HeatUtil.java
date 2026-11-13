@@ -14,6 +14,7 @@ public final class HeatUtil {
     private static Profile profile(Entity e) {
         EntityType<?> t = e.getType();
 
+        if (e instanceof DroneEntity) return new Profile(0.65f, 45f);   // motores quentes
         if (e.isOnFire()) return new Profile(1.00f, 85f);
         if (t == EntityType.BLAZE || t == EntityType.MAGMA_CUBE) return new Profile(1.00f, 120f);
         if (t == EntityType.TNT || t == EntityType.FIREBALL || t == EntityType.SMALL_FIREBALL

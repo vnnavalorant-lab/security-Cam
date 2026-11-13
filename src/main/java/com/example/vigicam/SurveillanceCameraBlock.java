@@ -1,14 +1,11 @@
 package com.example.vigicam;
 
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.HorizontalFacingBlock;
 import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.state.StateManager;
 import net.minecraft.util.ActionResult;
@@ -48,10 +45,12 @@ public class SurveillanceCameraBlock extends HorizontalFacingBlock {
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player,
                               Hand hand, BlockHitResult hit) {
         if (!world.isClient && player instanceof ServerPlayerEntity sp) {
-            PacketByteBuf buf = PacketByteBufs.create();
-            buf.writeBlockPos(pos);
-            buf.writeFloat(state.get(FACING).asRotation());
-            ServerPlayNetworking.send(sp, VigiCam.VIEW_CAMERA, buf);
+            if (player.getStackInHand(hand).getItem() instanceof RemoteItem) {
+                RemoteItem.connectTo(sp, player.getStackInHand(hand), RemoteItem.Link.camera(world, pos));
+            } else {
+                DroneControl.release(sp.getUuid());
+                VigiCam.sendViewCamera(sp, pos, state.get(FACING).asRotation(), -1, 0);
+            }
         }
         return ActionResult.SUCCESS;
     }

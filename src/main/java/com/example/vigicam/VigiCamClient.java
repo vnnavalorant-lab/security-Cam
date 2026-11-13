@@ -5,7 +5,10 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -22,6 +25,7 @@ import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
@@ -40,7 +44,7 @@ public class VigiCamClient implements ClientModInitializer {
     private static final double SCAN_RANGE = 48.0;
     private static final int MAX_TARGETS = 16;
 
-    private static KeyBinding toggleKey;
+    private static KeyBinding toggleKey, manualKey, nextKey;
 
     // resultado do scan térmico (atualizado no tick)
     private static final List<Entity> targets = new ArrayList<>();
@@ -50,11 +54,30 @@ public class VigiCamClient implements ClientModInitializer {
     public void onInitializeClient() {
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.vigicam.toggle_vision", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "key.categories.vigicam"));
+        manualKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.vigicam.toggle_manual", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "key.categories.vigicam"));
+        nextKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.vigicam.next_device", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "key.categories.vigicam"));
+
+        EntityModelLayerRegistry.registerModelLayer(DroneModel.LAYER, DroneModel::getTexturedModelData);
+        EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);
 
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_CAMERA, (client, handler, buf, sender) -> {
             BlockPos pos = buf.readBlockPos();
             float yaw = buf.readFloat();
-            client.execute(() -> startView(client, pos, yaw));
+            int idx = buf.readInt(), cnt = buf.readInt();
+            client.execute(() -> {
+                boolean fresh = CameraViewClient.startBlock(client, pos, yaw, idx, cnt);
+                applyShader(client, fresh);
+            });
+        });
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_DRONE, (client, handler, buf, sender) -> {
+            int id = buf.readInt();
+            int idx = buf.readInt(), cnt = buf.readInt();
+            client.execute(() -> {
+                boolean fresh = CameraViewClient.startDrone(client, id, idx, cnt);
+                applyShader(client, fresh);
+            });
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(VigiCamClient::tick);
@@ -73,55 +96,79 @@ public class VigiCamClient implements ClientModInitializer {
                         : TypedActionResult.pass(p.getStackInHand(h)));
     }
 
-    private static void applyShader(MinecraftClient mc) {
+    /** Carrega o shader da visão atual (noturna ou térmica). */
+    private static void applyShader(MinecraftClient mc, boolean force) {
+        if (!force && !CameraViewClient.isActive()) return;
         Identifier id = CameraViewClient.isThermal() ? SHADER_THERMAL : SHADER_NIGHT;
         ((GameRendererInvoker) mc.gameRenderer).invokeLoadPostProcessor(id);
     }
 
-    private static void startView(MinecraftClient mc, BlockPos pos, float yaw) {
-        if (CameraViewClient.isActive()) return;
-        CameraViewClient.start(pos, yaw);   // começa na visão noturna
-        applyShader(mc);
-    }
-
     private static void stopView(MinecraftClient mc) {
+        if (CameraViewClient.isDrone()) ClientPlayNetworking.send(VigiCam.DRONE_RELEASE, PacketByteBufs.empty());
         mc.gameRenderer.disablePostProcessor();
-        CameraViewClient.stop();
+        CameraViewClient.stop(mc);
         targets.clear();
     }
 
     private static void tick(MinecraftClient mc) {
         if (!CameraViewClient.isActive()) {
             while (toggleKey.wasPressed()) { /* descarta */ }
+            while (manualKey.wasPressed()) { /* descarta */ }
+            while (nextKey.wasPressed()) { /* descarta */ }
             return;
         }
         boolean sneak = mc.options.sneakKey.isPressed();
-        if (mc.player == null || mc.world == null
-                || !(mc.world.getBlockState(CameraViewClient.getBlockPos()).getBlock() instanceof SurveillanceCameraBlock)
-                || mc.player.hurtTime > 0
+        boolean gone;
+        if (CameraViewClient.isDrone()) {
+            gone = CameraViewClient.droneLost();
+        } else {
+            gone = mc.world == null
+                    || !(mc.world.getBlockState(CameraViewClient.getBlockPos()).getBlock() instanceof SurveillanceCameraBlock);
+        }
+        if (mc.player == null || mc.world == null || gone || mc.player.hurtTime > 0
                 || CameraViewClient.shouldExit(sneak)) {
             stopView(mc);
             return;
         }
 
+        CameraViewClient.tick(mc);
+
         boolean toggled = false;
         while (toggleKey.wasPressed()) toggled = !toggled;
         if (toggled) {
             CameraViewClient.toggleMode();
-            applyShader(mc);
+            applyShader(mc, false);
         }
+        while (manualKey.wasPressed()) CameraViewClient.toggleManual(mc, mc.getTickDelta());
+        while (nextKey.wasPressed()) ClientPlayNetworking.send(VigiCam.CYCLE_DEVICE, PacketByteBufs.empty());
 
+        if (CameraViewClient.isDrone()) sendDroneInput(mc);
         if (CameraViewClient.isThermal() && mc.player.age % 2 == 0) scanEntities(mc);
+    }
+
+    /** WASD move, Espaço sobe, Ctrl desce; o drone gira para onde o mouse olha. */
+    private static void sendDroneInput(MinecraftClient mc) {
+        float forward = (mc.options.forwardKey.isPressed() ? 1f : 0f) - (mc.options.backKey.isPressed() ? 1f : 0f);
+        float strafe = (mc.options.rightKey.isPressed() ? 1f : 0f) - (mc.options.leftKey.isPressed() ? 1f : 0f);
+        float vertical = (mc.options.jumpKey.isPressed() ? 1f : 0f) - (mc.options.sprintKey.isPressed() ? 1f : 0f);
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeFloat(forward);
+        buf.writeFloat(strafe);
+        buf.writeFloat(vertical);
+        buf.writeFloat(mc.player.getYaw());
+        buf.writeFloat(mc.player.getPitch());
+        ClientPlayNetworking.send(VigiCam.DRONE_INPUT, buf);
     }
 
     /** Procura entidades vivas à vista da câmera (para marcadores e para o Max/Min do HUD). */
     private static void scanEntities(MinecraftClient mc) {
-        Vec3d cam = CameraViewClient.getPos();
+        Vec3d cam = CameraViewClient.getPos(1f);
         targets.clear();
 
         List<Entity> found = mc.world.getOtherEntities(null,
                 Box.of(cam, SCAN_RANGE * 2, SCAN_RANGE * 2, SCAN_RANGE * 2),
-                e -> e instanceof LivingEntity && e.isAlive() && e != mc.player
+                e -> (e instanceof LivingEntity || e instanceof DroneEntity) && e.isAlive() && e != mc.player
+                        && !CameraViewClient.isDrone(e.getId())
                         && e.squaredDistanceTo(cam) <= SCAN_RANGE * SCAN_RANGE);
         found.sort(Comparator.comparingDouble(e -> e.squaredDistanceTo(cam)));
 
@@ -144,20 +191,42 @@ public class VigiCamClient implements ClientModInitializer {
     private static void renderHud(DrawContext ctx, float tickDelta) {
         if (!CameraViewClient.isActive()) return;
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null) return;
         boolean thermal = CameraViewClient.isThermal();
+        boolean drone = CameraViewClient.isDrone();
         int w = ctx.getScaledWindowWidth(), h = ctx.getScaledWindowHeight();
         int color = thermal ? 0xFFFFFFFF : 0xFF55FF55;
         int len = 20, t = 2, m = 12;
 
-        boolean blink = mc.player != null && (mc.player.age / 10) % 2 == 0;
+        boolean blink = (mc.player.age / 10) % 2 == 0;
         ctx.drawText(mc.textRenderer, (blink ? "● " : "  ") + "LIVE", m + 6, m + 6, 0xFFFF3030, true);
+
+        // título e modo de controle
+        String title = drone ? "DRONE" : "CAM";
+        if (CameraViewClient.getCount() > 0) title += "  " + (CameraViewClient.getIndex() + 1) + "/" + CameraViewClient.getCount();
+        title += thermal ? "  TÉRMICA" : "  NOTURNA";
+        ctx.drawText(mc.textRenderer, title, m + 6, m + 18, color, true);
+        if (drone) {
+            ctx.drawText(mc.textRenderer, "PILOTO", m + 6, m + 30, 0xFFFFD040, true);
+        } else if (CameraViewClient.isManual()) {
+            ctx.drawText(mc.textRenderer, "MANUAL", m + 6, m + 30, 0xFFFFD040, true);
+        } else {
+            ctx.drawText(mc.textRenderer, "AUTO", m + 6, m + 30, 0xFF909090, true);
+        }
 
         String time = LocalTime.now().format(CLOCK);
         ctx.drawText(mc.textRenderer, time, w - m - 6 - mc.textRenderer.getWidth(time), m + 6, color, true);
 
-        String hint = "Shift para sair  |  [" + toggleKey.getBoundKeyLocalizedText().getString() + "] "
-                + (thermal ? "visão noturna" : "visão térmica");
+        String vis = "[" + toggleKey.getBoundKeyLocalizedText().getString() + "] " + (thermal ? "visão noturna" : "visão térmica");
+        String hint = drone
+                ? "WASD mover  |  Espaço/Ctrl subir/descer  |  Shift sair  |  " + vis
+                : "Shift sair  |  " + vis + "  |  [" + manualKey.getBoundKeyLocalizedText().getString() + "] "
+                        + (CameraViewClient.isManual() ? "varredura automática" : "mover visão");
         ctx.drawCenteredTextWithShadow(mc.textRenderer, hint, w / 2, h - 34, color);
+        if (CameraViewClient.getCount() > 1) {
+            ctx.drawCenteredTextWithShadow(mc.textRenderer,
+                    "[" + nextKey.getBoundKeyLocalizedText().getString() + "] próximo dispositivo", w / 2, h - 46, 0xFFB0B0B0);
+        }
 
         // cantos do enquadramento
         ctx.fill(m, m, m + len, m + t, color);                 ctx.fill(m, m, m + t, m + len, color);
@@ -165,7 +234,34 @@ public class VigiCamClient implements ClientModInitializer {
         ctx.fill(m, h - m - t, m + len, h - m, color);         ctx.fill(m, h - m - len, m + t, h - m, color);
         ctx.fill(w - m - len, h - m - t, w - m, h - m, color); ctx.fill(w - m - t, h - m - len, w - m, h - m, color);
 
+        if (drone) renderDroneTelemetry(ctx, mc, w, h, m, color);
+
+        // sem sinal: o chunk onde a câmera está não chegou no cliente
+        Vec3d cam = CameraViewClient.getPos(tickDelta);
+        if (!mc.world.getChunkManager().isChunkLoaded(((int) Math.floor(cam.x)) >> 4, ((int) Math.floor(cam.z)) >> 4)) {
+            ctx.fill(0, 0, w, h, 0xCC000000);
+            ctx.drawCenteredTextWithShadow(mc.textRenderer, "SEM SINAL", w / 2, h / 2 - 4, 0xFFFF4040);
+        }
+
         if (thermal) renderThermalHud(ctx, mc, tickDelta, w, h, m);
+    }
+
+    private static void renderDroneTelemetry(DrawContext ctx, MinecraftClient mc, int w, int h, int m, int color) {
+        DroneEntity d = CameraViewClient.getDrone(mc);
+        if (d == null) return;
+        double dist = d.distanceTo(mc.player);
+        double speed = d.getPos().distanceTo(new Vec3d(d.prevX, d.prevY, d.prevZ)) * 20.0;
+        int x = m + 6, y = h - m - 40;
+        ctx.drawText(mc.textRenderer, String.format("ALT  %.1f m", d.getY()), x, y, color, true);
+        ctx.drawText(mc.textRenderer, String.format("DIST %.0f m", dist), x, y + 10, color, true);
+        ctx.drawText(mc.textRenderer, String.format("VEL  %.1f m/s", speed), x, y + 20, color, true);
+
+        // barra de sinal (cai conforme se afasta de quem pilota)
+        float sig = (float) Math.max(0.0, 1.0 - dist / DroneEntity.RANGE);
+        int bx = x + 76, by = y + 20, bw = 40;
+        ctx.fill(bx, by, bx + bw, by + 7, 0x88000000);
+        ctx.fill(bx, by, bx + (int) (bw * sig), by + 7, sig > 0.25f ? 0xFF55FF55 : 0xFFFF4040);
+        if (sig < 0.1f) ctx.drawCenteredTextWithShadow(mc.textRenderer, "SINAL FRACO", w / 2, m + 40, 0xFFFF4040);
     }
 
     // ------------------------------------------------------------------ HUD térmico
@@ -173,7 +269,7 @@ public class VigiCamClient implements ClientModInitializer {
     private static void renderThermalHud(DrawContext ctx, MinecraftClient mc, float tickDelta, int w, int h, int m) {
         // leitura Max / Min
         String max = String.format("%.1f", maxC), min = String.format("%.1f", minC);
-        int bx = m + 6, by = m + 22;
+        int bx = m + 6, by = m + 46;
         ctx.fill(bx - 3, by - 3, bx + 92, by + 22, 0x99000000);
         ctx.drawText(mc.textRenderer, "Max", bx, by, 0xFFCCCCCC, false);
         ctx.drawText(mc.textRenderer, "Min", bx + 40, by, 0xFFCCCCCC, false);
@@ -200,8 +296,8 @@ public class VigiCamClient implements ClientModInitializer {
         ctx.fill(cx - 1, cy + 3, cx + 1, cy + 10, red);
 
         // marcadores nas entidades
-        Vec3d cam = CameraViewClient.getPos();
-        float yaw = CameraViewClient.getYaw(tickDelta), pitch = CameraViewClient.getPitch();
+        Vec3d cam = CameraViewClient.getPos(tickDelta);
+        float yaw = CameraViewClient.getYaw(tickDelta), pitch = CameraViewClient.getPitch(tickDelta);
         Vec3d f = Vec3d.fromPolar(pitch, yaw);
         Vec3d r = f.crossProduct(new Vec3d(0, 1, 0)).normalize();
         Vec3d u = r.crossProduct(f);

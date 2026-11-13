@@ -20,9 +20,9 @@ public abstract class CameraMixin {
     private void vigicam$update(BlockView area, Entity focusedEntity, boolean thirdPerson,
                                 boolean inverseView, float tickDelta, CallbackInfo ci) {
         if (CameraViewClient.isActive()) {
-            Vec3d p = CameraViewClient.getPos();
+            Vec3d p = CameraViewClient.getPos(tickDelta);
             setPos(p.x, p.y, p.z);
-            setRotation(CameraViewClient.getYaw(tickDelta), CameraViewClient.getPitch());
+            setRotation(CameraViewClient.getYaw(tickDelta), CameraViewClient.getPitch(tickDelta));
         }
     }
 }
