@@ -73,6 +73,20 @@ public class VigiCamClient implements ClientModInitializer {
         EntityModelLayerRegistry.registerModelLayer(DroneModel.LAYER, DroneModel::getTexturedModelData);
         EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);
         BlockEntityRendererFactories.register(VigiCam.CAMERA_BE, CameraBlockEntityRenderer::new);
+        BlockEntityRendererFactories.register(VigiCam.ANTENNA_BE, AntennaBlockEntityRenderer::new);
+
+        // partículas de sinal da antena (desenho próprio, brilho aditivo)
+        net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry pfr =
+                net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry.getInstance();
+        pfr.register(VigiCam.SIGNAL_WAVE, (type, world, x, y, z, vx, vy, vz) -> SignalParticle.wave(world, x, y, z, vx, vy));
+        pfr.register(VigiCam.SIGNAL_GLOW, (type, world, x, y, z, vx, vy, vz) -> SignalParticle.glow(world, x, y, z));
+        pfr.register(VigiCam.SIGNAL_SPARK, (type, world, x, y, z, vx, vy, vz) -> SignalParticle.spark(world, x, y, z, vx, vy, vz));
+
+        // o servidor avisou que o drone perdeu o sinal: sai da visão dele
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.SIGNAL_LOST, (client, handler, buf, sender) ->
+                client.execute(() -> {
+                    if (CameraViewClient.isActive() && CameraViewClient.isDrone()) stopView(client);
+                }));
 
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_CAMERA, (client, handler, buf, sender) -> {
             BlockPos pos = buf.readBlockPos();
@@ -301,10 +315,13 @@ public class VigiCamClient implements ClientModInitializer {
         ctx.drawText(mc.textRenderer, String.format("VEL  %.1f m/s", speed), x, y + 20, color, true);
 
         // barra de sinal (cai conforme se afasta de quem pilota)
-        float sig = (float) Math.max(0.0, 1.0 - dist / DroneEntity.RANGE);
+        float sig = (float) Math.max(0.0, 1.0 - dist / d.getSignalRange());
         int bx = x + 76, by = y + 20, bw = 40;
         ctx.fill(bx, by, bx + bw, by + 7, 0x88000000);
         ctx.fill(bx, by, bx + (int) (bw * sig), by + 7, sig > 0.25f ? 0xFF55FF55 : 0xFFFF4040);
+        if (d.isAmplified()) {   // antena do piloto dando sinal
+            ctx.drawText(mc.textRenderer, "▲ ANTENA +" + (int) (d.getSignalRange() - DroneEntity.RANGE) + " m", bx, by - 10, 0xFF55FF55, true);
+        }
         if (sig < 0.1f) ctx.drawCenteredTextWithShadow(mc.textRenderer, "SINAL FRACO", w / 2, m + 40, 0xFFFF4040);
     }
 

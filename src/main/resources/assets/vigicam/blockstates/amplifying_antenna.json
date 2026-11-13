@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "active=false,facing=north": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=false,facing=east": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=false,facing=south": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=false,facing=west": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    },
+    "active=true,facing=north": {
+      "model": "vigicam:block/amplifying_antenna"
+    },
+    "active=true,facing=east": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 90
+    },
+    "active=true,facing=south": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 180
+    },
+    "active=true,facing=west": {
+      "model": "vigicam:block/amplifying_antenna",
+      "y": 270
+    }
+  }
+}

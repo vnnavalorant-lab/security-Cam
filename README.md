@@ -43,3 +43,11 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 
 **Câmera manual:** dentro de uma câmera fixa, **G** liga o modo manual (você move a visão com o mouse, até ±110° do eixo da câmera);
 **G** de novo volta suavemente para a varredura automática. Todas as teclas são configuráveis em Controles > VigiCam.
+
+## Antena Amplificadora
+
+- **Dono:** quem coloca a antena é o dono. Só os drones pilotados por ele recebem o sinal ampliado (clique direito na antena mostra o dono).
+- **Alcance:** o drone normalmente voa até 96 blocos do piloto. Com uma antena do piloto a até 64 blocos do drone **ou** do piloto, o alcance sobe **+50 blocos** (146). A barra de sinal do HUD usa o alcance real e mostra `▲ ANTENA +50 m`.
+- **Perda de sinal:** se a antena deixar de cobrir o drone (piloto se afasta, antena quebrada), o controle é solto, o jogador sai da visão do drone e ele **volta sozinho para a base** de onde saiu (o retorno automático não depende de sinal).
+- **Efeitos:** ondas de rádio (anéis de brilho aditivo que se expandem da ponta e do meio do mastro), halo pulsante, faíscas de dados e LEDs vermelhos emissivos pulsando. Com um drone usando a antena (`active=true`) tudo fica mais rápido/intenso e o bloco emite mais luz.
+- Receita: pára-raios + bloco de redstone + 5 barras de ferro.

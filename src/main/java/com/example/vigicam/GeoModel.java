@@ -136,10 +136,17 @@ public final class GeoModel {
      * @param rootYaw  giro (graus, em torno de +Y) aplicado ao pivô "root"
      */
     public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw) {
-        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw);
+        render(matrices, vc, light, overlay, rootYaw, 255, 255, 255, 255);
     }
 
-    private void renderGroup(Group g, MatrixStack m, VertexConsumer vc, int light, int overlay, float rootYaw) {
+    /** Igual ao anterior, com cor/alpha por vértice (0-255): usado nas camadas brilhantes (LEDs) que pulsam. */
+    public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw,
+                       int r, int gr, int b, int a) {
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a);
+    }
+
+    private void renderGroup(Group g, MatrixStack m, VertexConsumer vc, int light, int overlay, float rootYaw,
+                             int cr, int cg, int cb, int ca) {
         m.push();
         if (ROOT.equals(g.name)) {
             m.translate(g.px, g.py, g.pz);
@@ -152,7 +159,7 @@ public final class GeoModel {
         for (Quad q : g.quads) {
             for (int i = 0; i < 4; i++) {
                 vc.vertex(pos, q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2])
-                        .color(255, 255, 255, 255)
+                        .color(cr, cg, cb, ca)
                         .texture(q.uv[i * 2], q.uv[i * 2 + 1])
                         .overlay(overlay)
                         .light(light)
@@ -160,7 +167,7 @@ public final class GeoModel {
                         .next();
             }
         }
-        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw);
+        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw, cr, cg, cb, ca);
         m.pop();
     }
 }

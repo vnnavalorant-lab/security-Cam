@@ -25,6 +25,9 @@ public class BuiltinModelItemRendererMixin {
         } else if (stack.getItem() == VigiCam.SURVEILLANCE_CAMERA_ITEM) {
             HeldItemRenderers.camera(mode, matrices, vcp, light, overlay);
             ci.cancel();
+        } else if (stack.getItem() == VigiCam.AMPLIFYING_ANTENNA_ITEM) {
+            HeldItemRenderers.antenna(mode, matrices, vcp, light, overlay);
+            ci.cancel();
         } else if (stack.getItem() == VigiCam.REMOTE_ITEM) {
             // 1ª pessoa: nas duas mãos (modelo "hand"); demais contextos: modelo 3D posicionado só pelo "display"
             if (HandModels.isFirstPerson(mode)) HeldItemRenderers.remoteFirstPerson(mode, stack, matrices, vcp, light, overlay);

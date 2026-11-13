@@ -75,6 +75,21 @@ public final class HeldItemRenderers {
         m.pop();
     }
 
+    // ------------------------------------------------------------------ antena amplificadora (modelo 3D)
+
+    /** Mesmo quadro da câmera: posição/escala/rotação vêm só do "display" do JSON; LEDs pulsando na camada brilhante. */
+    public static void antenna(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
+        float pulse = 0.65f + 0.35f * (float) Math.sin(Util.getMeasuringTimeMs() / 350.0);
+        m.push();
+        m.translate(0.5, 0.51, 0.5);
+        m.scale(1f / 16f, 1f / 16f, 1f / 16f);
+        GeoModel model = AntennaBlockEntityRenderer.model();
+        model.render(m, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(AntennaBlockEntityRenderer.TEXTURE)), light, overlay, 0f);
+        model.render(m, vcp.getBuffer(RenderLayer.getEyes(AntennaBlockEntityRenderer.GLOW)), 0xF000F0, overlay, 0f,
+                255, 255, 255, (int) (255 * pulse));
+        m.pop();
+    }
+
     // ------------------------------------------------------------------ controle remoto (modelo 3D)
 
     private static void renderRemote(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {

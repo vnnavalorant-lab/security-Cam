@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.particle.v1.FabricParticleTypes;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
@@ -20,6 +21,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.particle.SimpleParticleType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -41,17 +43,31 @@ public class VigiCam implements ModInitializer {
     public static final Identifier VIEW_STATE = new Identifier(MOD_ID, "view_state");   // cliente -> servidor: "estou nas câmeras/drone"
     // servidor -> clientes próximos: quem está pilotando (para as mãos nos controles)
     public static final Identifier PILOT_SYNC = new Identifier(MOD_ID, "pilot_sync");
+    // servidor -> cliente: o drone perdeu o sinal (sai da visão do drone)
+    public static final Identifier SIGNAL_LOST = new Identifier(MOD_ID, "signal_lost");
 
     public static final Block SURVEILLANCE_CAMERA = new SurveillanceCameraBlock(
             FabricBlockSettings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
     public static final BlockItem SURVEILLANCE_CAMERA_ITEM =
             new BlockItem(SURVEILLANCE_CAMERA, new FabricItemSettings());
 
+    public static final Block AMPLIFYING_ANTENNA = new AmplifyingAntennaBlock(
+            FabricBlockSettings.create().strength(3.0f).sounds(BlockSoundGroup.METAL).nonOpaque()
+                    .luminance(state -> state.get(AmplifyingAntennaBlock.ACTIVE) ? 9 : 4));
+    public static final BlockItem AMPLIFYING_ANTENNA_ITEM =
+            new BlockItem(AMPLIFYING_ANTENNA, new FabricItemSettings());
+
+    // partículas do sinal da antena (desenhadas no cliente por SignalParticle)
+    public static final SimpleParticleType SIGNAL_WAVE = FabricParticleTypes.simple();
+    public static final SimpleParticleType SIGNAL_GLOW = FabricParticleTypes.simple();
+    public static final SimpleParticleType SIGNAL_SPARK = FabricParticleTypes.simple();
+
     public static final Item DRONE_ITEM = new DroneItem(new FabricItemSettings().maxCount(16));
     public static final Item REMOTE_ITEM = new RemoteItem(new FabricItemSettings().maxCount(1));
 
     public static EntityType<DroneEntity> DRONE;
     public static BlockEntityType<SurveillanceCameraBlockEntity> CAMERA_BE;
+    public static BlockEntityType<AmplifyingAntennaBlockEntity> ANTENNA_BE;
 
     @Override
     public void onInitialize() {
@@ -61,6 +77,15 @@ public class VigiCam implements ModInitializer {
         Registry.register(Registries.ITEM, id, SURVEILLANCE_CAMERA_ITEM);
         CAMERA_BE = Registry.register(Registries.BLOCK_ENTITY_TYPE, id,
                 FabricBlockEntityTypeBuilder.create(SurveillanceCameraBlockEntity::new, SURVEILLANCE_CAMERA).build());
+        Identifier antennaId = new Identifier(MOD_ID, "amplifying_antenna");
+        Registry.register(Registries.BLOCK, antennaId, AMPLIFYING_ANTENNA);
+        Registry.register(Registries.ITEM, antennaId, AMPLIFYING_ANTENNA_ITEM);
+        ANTENNA_BE = Registry.register(Registries.BLOCK_ENTITY_TYPE, antennaId,
+                FabricBlockEntityTypeBuilder.create(AmplifyingAntennaBlockEntity::new, AMPLIFYING_ANTENNA).build());
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_wave"), SIGNAL_WAVE);
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_glow"), SIGNAL_GLOW);
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_spark"), SIGNAL_SPARK);
+        AntennaNetwork.init();
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "drone"), DRONE_ITEM);
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "remote"), REMOTE_ITEM);
 
@@ -75,6 +100,7 @@ public class VigiCam implements ModInitializer {
             entries.add(SURVEILLANCE_CAMERA_ITEM);
             entries.add(DRONE_ITEM);
             entries.add(REMOTE_ITEM);
+            entries.add(AMPLIFYING_ANTENNA_ITEM);
         });
 
         // --- rede: cliente -> servidor ---
@@ -125,6 +151,10 @@ public class VigiCam implements ModInitializer {
         buf.writeInt(index);
         buf.writeInt(count);
         ServerPlayNetworking.send(sp, VIEW_CAMERA, buf);
+    }
+
+    public static void sendSignalLost(ServerPlayerEntity sp) {
+        ServerPlayNetworking.send(sp, SIGNAL_LOST, PacketByteBufs.create());
     }
 
     public static void sendViewDrone(ServerPlayerEntity sp, int entityId, int index, int count) {

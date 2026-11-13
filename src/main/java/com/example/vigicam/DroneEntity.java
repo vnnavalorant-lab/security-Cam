@@ -15,6 +15,7 @@ import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Box;
@@ -37,11 +38,15 @@ public class DroneEntity extends Entity {
 
     private static final TrackedData<Boolean> POWERED =
             DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+    /** Alcance de sinal atual (96, ou 96 + 50 com antena do piloto por perto): o cliente usa na barra de sinal. */
+    private static final TrackedData<Float> SIGNAL_RANGE =
+            DataTracker.registerData(DroneEntity.class, TrackedDataHandlerRegistry.FLOAT);
 
     private static final double RETURN_SPEED = 0.25;   // velocidade de volta à base (blocos/tick)
 
     @Nullable private UUID controller;
     private Vec3d vel = Vec3d.ZERO;
+    private boolean amplified;   // servidor: há uma antena do piloto dando sinal
 
     // base: onde o drone foi colocado no chão pela última vez
     @Nullable private Vec3d home;
@@ -64,7 +69,12 @@ public class DroneEntity extends Entity {
     @Override
     protected void initDataTracker() {
         this.dataTracker.startTracking(POWERED, false);
+        this.dataTracker.startTracking(SIGNAL_RANGE, (float) RANGE);
     }
+
+    /** Alcance de sinal em vigor (blocos): {@link #RANGE}, mais o bônus da antena quando ela está dando sinal. */
+    public float getSignalRange() { return this.dataTracker.get(SIGNAL_RANGE); }
+    public boolean isAmplified() { return getSignalRange() > RANGE + 1.0f; }
 
     public boolean isPowered() { return this.dataTracker.get(POWERED); }
     private void setPowered(boolean v) { this.dataTracker.set(POWERED, v); }
@@ -76,7 +86,12 @@ public class DroneEntity extends Entity {
         resetReturn();
         setPowered(true);
     }
-    public void clearController() { this.controller = null; resetReturn(); }
+    public void clearController() {
+        this.controller = null;
+        this.amplified = false;
+        this.dataTracker.set(SIGNAL_RANGE, (float) RANGE);
+        resetReturn();
+    }
 
     @Nullable public Vec3d getHome() { return home; }
     public void setHome(Vec3d h) { this.home = h; }
@@ -202,10 +217,18 @@ public class DroneEntity extends Entity {
             vel = new Vec3d(vel.x * 0.5, Math.max(vel.y - 0.04, -1.0), vel.z * 0.5);   // desligado: cai
         }
 
-        if (pilot != null) {   // limite de alcance do sinal
+        if (pilot != null) {   // antena do piloto por perto: +50 blocos de alcance
+            if (this.age % 5 == 0) updateAntenna(pilot);
+            double range = RANGE + (amplified ? AntennaNetwork.RANGE_BONUS : 0.0);
             Vec3d off = this.getPos().subtract(pilot.getPos());
             double dist = off.length();
-            if (dist > RANGE) {
+            if (dist > range + SIGNAL_LOSS_MARGIN) {
+                // a antena deixou de cobrir o drone (piloto se afastou / antena destruída): sinal perdido.
+                // O retorno à base não depende do sinal, então ele volta sozinho de onde estiver.
+                loseSignal(pilot);
+                pilot = null;
+                in = null;
+            } else if (dist > range) {   // limite de alcance do sinal
                 Vec3d out = off.normalize();
                 double v = vel.dotProduct(out);
                 if (v > 0) vel = vel.subtract(out.multiply(v));
@@ -230,6 +253,34 @@ public class DroneEntity extends Entity {
                 resetReturn();
             }
         }
+    }
+
+    private static final double SIGNAL_LOSS_MARGIN = 6.0;   // tolerância além do alcance antes de perder o sinal
+
+    /** Procura uma antena DO PILOTO perto do drone ou do piloto e ajusta o alcance. */
+    private void updateAntenna(ServerPlayerEntity pilot) {
+        ServerWorld sw = (ServerWorld) this.getWorld();
+        AmplifyingAntennaBlockEntity ant = AntennaNetwork.find(sw, pilot.getUuid(), this.getPos(), pilot.getPos());
+        boolean now = ant != null;
+        if (now) ant.markLinked(sw.getTime());
+        if (now != amplified) {
+            amplified = now;
+            this.dataTracker.set(SIGNAL_RANGE, (float) (RANGE + (now ? AntennaNetwork.RANGE_BONUS : 0.0)));
+            // só avisa quando já está além do alcance normal (evita spam perto do piloto)
+            double dist = this.getPos().distanceTo(pilot.getPos());
+            if (now) pilot.sendMessage(Text.literal("§aAntena conectada §7· alcance +"
+                    + (int) AntennaNetwork.RANGE_BONUS + " blocos"), true);
+            else if (dist > RANGE) pilot.sendMessage(Text.literal("§eSinal da antena perdido"), true);
+        }
+    }
+
+    private void loseSignal(ServerPlayerEntity pilot) {
+        DroneControl.release(pilot.getUuid());   // limpa o controle; o drone passa a voltar para a base
+        controller = null;
+        amplified = false;
+        this.dataTracker.set(SIGNAL_RANGE, (float) RANGE);
+        pilot.sendMessage(Text.literal("§cSinal perdido §7· drone retornando à base"), false);
+        VigiCam.sendSignalLost(pilot);
     }
 
     /**
