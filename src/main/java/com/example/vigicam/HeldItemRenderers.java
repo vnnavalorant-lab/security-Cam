@@ -31,26 +31,18 @@ public final class HeldItemRenderers {
 
     // ------------------------------------------------------------------ drone (modelo 3D, rotores girando)
 
+    /**
+     * Desenha o drone no quadro de coordenadas do Blockbench: depois do "display" do JSON (aplicado pelo vanilla)
+     * a origem está no canto do cubo 16x16x16. O modelo é de entidade (Y para baixo, chão em y=24 px, x/z centrados),
+     * então o centro do cubo vai para x/z = 0,5 bloco, o chão para y = 24/16 e o eixo Y é invertido.
+     * Nenhum ajuste de posição/escala aqui: quem manda é o "display".
+     */
     public static void drone(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (droneModel == null) droneModel = new DroneModel(mc.getEntityModelLoader().getModelPart(DroneModel.LAYER));
-        boolean fp = HandModels.isFirstPerson(mode);
-        boolean right = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND
-                || mode == ModelTransformationMode.THIRD_PERSON_RIGHT_HAND;
-
-        float s = (fp ? 0.016f : 0.0125f);   // 1 px do modelo em blocos (envergadura ~0,6 bloco na mão)
         m.push();
-        m.translate(0.5, 0.5, 0.5);
-        if (fp) {
-            m.translate(right ? -0.10 : 0.10, 0.12, 0.0);
-            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(14f));
-            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(right ? -28f : 28f));
-        } else {
-            m.translate(0.0, 0.06, -0.02);
-            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-12f));
-        }
-        m.scale(s, -s, s);                   // o modelo vem com Y para baixo
-        m.translate(0, -19, 0);              // centro do modelo (px) na origem
+        m.translate(0.5, 24.0 / 16.0, 0.5);
+        m.scale(1f / 16f, -1f / 16f, 1f / 16f);
         droneModel.setRotorAngle(-((Util.getMeasuringTimeMs() % 250L) / 250f) * 360f);   // 4 voltas/s
         VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(DRONE_TEX));
         droneModel.render(m, vc, light);
@@ -59,24 +51,15 @@ public final class HeldItemRenderers {
 
     // ------------------------------------------------------------------ câmera de segurança (modelo 3D)
 
+    /**
+     * Mesmo quadro do bloco (CameraBlockEntityRenderer) e do Blockbench: origem no centro-baixo do cubo,
+     * 1 px = 1/16 de bloco, lente para -Z. Posição/escala/rotação vêm só do "display" do JSON.
+     */
     public static void camera(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
-        boolean fp = HandModels.isFirstPerson(mode);
-        boolean right = mode == ModelTransformationMode.FIRST_PERSON_RIGHT_HAND
-                || mode == ModelTransformationMode.THIRD_PERSON_RIGHT_HAND;
-        float s = (fp ? 0.058f : 0.045f);
         float sweep = 22f * (float) Math.sin(Util.getMeasuringTimeMs() / 700.0);   // corpo da câmera "varrendo"
         m.push();
-        m.translate(0.5, 0.5, 0.5);
-        if (fp) {
-            m.translate(right ? -0.10 : 0.10, 0.10, 0.0);
-            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10f));
-            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(right ? -32f : 32f));
-        } else {
-            m.translate(0.0, 0.05, -0.02);
-            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-10f));
-        }
-        m.scale(s, s, s);
-        m.translate(0, -6, 1);               // centro do modelo (px) na origem; lente aponta para -Z (frente)
+        m.translate(0.5, 0.0, 0.5);
+        m.scale(1f / 16f, 1f / 16f, 1f / 16f);
         VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(SecurityCameraModel.TEXTURE));
         SecurityCameraModel.get().render(m, vc, light, overlay, sweep);
         m.pop();

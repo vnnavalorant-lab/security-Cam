@@ -8,7 +8,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 
 /**
- * Itens do mod têm dois modelos: o sprite (inventário, chão, moldura) e um modelo "na mão" (builtin/entity),
+ * (Drone e câmera são 3D em todos os contextos e não passam por aqui.) O controle remoto tem dois modelos: o sprite (inventário, chão, moldura) e um modelo "na mão" (builtin/entity),
  * escolhido por um override com o predicado "vigicam:hand". O predicado só vale 1 durante a chamada
  * feita por {@link #forHand}, que o ItemRendererMixin usa quando o item é desenhado na mão.
  */
@@ -19,14 +19,14 @@ public final class HandModels {
     private static boolean asking;
 
     public static void register() {
-        for (Item item : new Item[]{VigiCam.DRONE_ITEM, VigiCam.REMOTE_ITEM, VigiCam.SURVEILLANCE_CAMERA_ITEM}) {
+        for (Item item : new Item[]{VigiCam.REMOTE_ITEM}) {
             ModelPredicateProviderRegistry.register(item, PREDICATE, (stack, world, entity, seed) -> asking ? 1f : 0f);
         }
     }
 
     public static boolean isOurs(ItemStack stack) {
         Item i = stack.getItem();
-        return i == VigiCam.DRONE_ITEM || i == VigiCam.REMOTE_ITEM || i == VigiCam.SURVEILLANCE_CAMERA_ITEM;
+        return i == VigiCam.REMOTE_ITEM;
     }
 
     public static boolean isFirstPerson(ModelTransformationMode m) {

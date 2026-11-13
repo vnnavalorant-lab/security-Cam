@@ -18,7 +18,7 @@ public class BuiltinModelItemRendererMixin {
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void vigicam$render(ItemStack stack, ModelTransformationMode mode, MatrixStack matrices,
                                 VertexConsumerProvider vcp, int light, int overlay, CallbackInfo ci) {
-        if (!HandModels.isHand(mode)) return;
+        // drone e câmera: modelo 3D em todos os contextos (mão, GUI, chão, moldura, cabeça), posicionado só pelo "display"
         if (stack.getItem() == VigiCam.DRONE_ITEM) {
             HeldItemRenderers.drone(mode, matrices, vcp, light, overlay);
             ci.cancel();
