@@ -32,17 +32,19 @@ public final class HeldItemRenderers {
     // ------------------------------------------------------------------ drone (modelo 3D, rotores girando)
 
     /**
-     * Desenha o drone no quadro de coordenadas do Blockbench: depois do "display" do JSON (aplicado pelo vanilla)
-     * a origem está no canto do cubo 16x16x16. O modelo é de entidade (Y para baixo, chão em y=24 px, x/z centrados),
-     * então o centro do cubo vai para x/z = 0,5 bloco, o chão para y = 24/16 e o eixo Y é invertido.
-     * Nenhum ajuste de posição/escala aqui: quem manda é o "display".
+     * Mesmo quadro do GeckoLib (o plugin do Blockbench em que o "display" foi ajustado): depois do display do JSON
+     * (aplicado pelo vanilla) o GeoItemRenderer faz translate(0.5, 0.51, 0.5), ou seja, a origem do modelo (y=0, centro x/z)
+     * fica no centro do cubo, com Y para cima. Este modelo é de entidade Java (Y para baixo, chão em y=24 px) e o
+     * EntityRenderer o vira com scale(-1,-1,1), então: escala (-1/16,-1/16,1/16) e sobe o chão (y=24) para a origem.
+     * Nenhum ajuste de posição/escala além disso: quem manda é o "display".
      */
     public static void drone(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (droneModel == null) droneModel = new DroneModel(mc.getEntityModelLoader().getModelPart(DroneModel.LAYER));
         m.push();
-        m.translate(0.5, 24.0 / 16.0, 0.5);
-        m.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        m.translate(0.5, 0.51, 0.5);
+        m.scale(-1f / 16f, -1f / 16f, 1f / 16f);
+        m.translate(0, -24, 0);
         droneModel.setRotorAngle(-((Util.getMeasuringTimeMs() % 250L) / 250f) * 360f);   // 4 voltas/s
         VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(DRONE_TEX));
         droneModel.render(m, vc, light);
@@ -52,13 +54,13 @@ public final class HeldItemRenderers {
     // ------------------------------------------------------------------ câmera de segurança (modelo 3D)
 
     /**
-     * Mesmo quadro do bloco (CameraBlockEntityRenderer) e do Blockbench: origem no centro-baixo do cubo,
+     * Mesmo quadro do GeckoLib (veja o drone): origem do modelo (centro-baixo, y=0) no centro do cubo de display,
      * 1 px = 1/16 de bloco, lente para -Z. Posição/escala/rotação vêm só do "display" do JSON.
      */
     public static void camera(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
         float sweep = 22f * (float) Math.sin(Util.getMeasuringTimeMs() / 700.0);   // corpo da câmera "varrendo"
         m.push();
-        m.translate(0.5, 0.0, 0.5);
+        m.translate(0.5, 0.51, 0.5);
         m.scale(1f / 16f, 1f / 16f, 1f / 16f);
         VertexConsumer vc = vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(SecurityCameraModel.TEXTURE));
         SecurityCameraModel.get().render(m, vc, light, overlay, sweep);
