@@ -35,10 +35,11 @@ public abstract class HeldItemRendererMixin {
         // Com o controle na mão, clicar (esquerdo ou direito) NÃO balança o item/braços inteiros: o "swing" do vanilla
         // e o abaixar do item (reset do equip ao atacar/usar) são zerados. O clique vira só a animação da mão
         // apertando a tela (HeldItemRenderers.remoteFirstPerson).
-        if (!vigicam$reentry && item.getItem() instanceof RemoteItem && (swingProgress != 0f || equipProgress != 1f)) {
+        if (!vigicam$reentry && item.getItem() instanceof RemoteItem && (swingProgress != 0f || equipProgress != 0f)) {
             vigicam$reentry = true;
             try {
-                renderFirstPersonItem(player, tickDelta, pitch, hand, 0f, item, 1f, matrices, vcp, light);
+                // atenção: no vanilla, equipProgress 0 = item totalmente levantado, 1 = abaixado (fora da tela)
+                renderFirstPersonItem(player, tickDelta, pitch, hand, 0f, item, 0f, matrices, vcp, light);
             } finally {
                 vigicam$reentry = false;
             }
