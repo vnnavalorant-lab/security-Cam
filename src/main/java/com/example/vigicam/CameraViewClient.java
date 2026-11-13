@@ -46,9 +46,11 @@ public final class CameraViewClient {
     // posição da lista do controle remoto
     private static int index = -1, count = 0;
 
-    // rotação original do jogador (restaurada ao sair)
-    private static boolean hasSaved;
-    private static float savedYaw, savedPitch;
+    // ângulos da visão (mouse). O corpo/cabeça do jogador NÃO gira enquanto ele usa a câmera/drone:
+    // o mouse mexe só aqui (ver EntityMixin.changeLookDirection).
+    private static float viewYaw, viewPitch;
+    // 0..1: intensidade do que o piloto está apertando (para as mãos "mexendo" no controle)
+    private static float inputLevel;
 
     // ------------------------------------------------------------------ estado
 
@@ -105,17 +107,16 @@ public final class CameraViewClient {
         armed = false;
         mode = Mode.CAM;
         if (mc.player != null) {
-            savedYaw = mc.player.getYaw();
-            savedPitch = mc.player.getPitch();
-            hasSaved = true;
+            viewYaw = mc.player.getYaw();
+            viewPitch = mc.player.getPitch();
         }
+        inputLevel = 0f;
         return true;
     }
 
     public static void stop(MinecraftClient mc) {
-        if (hasSaved && mc.player != null) setPlayerRot(mc.player, savedYaw, savedPitch);
-        hasSaved = false;
         active = false;
+        inputLevel = 0f;
         manual = false;
         droneId = -1;
         index = -1;
@@ -146,8 +147,9 @@ public final class CameraViewClient {
             } else {
                 droneSeen = true;
                 droneMissing = 0;
-                if (alignPending && mc.player != null) {
-                    setPlayerRot(mc.player, d.getYaw(), d.getPitch());
+                if (alignPending) {
+                    viewYaw = d.getYaw();
+                    viewPitch = d.getPitch();
                     alignPending = false;
                 }
             }
@@ -160,7 +162,8 @@ public final class CameraViewClient {
         float yaw = getYaw(mc, tickDelta), pitch = getPitch(mc, tickDelta);
         if (!manual) {
             manual = true;
-            setPlayerRot(mc.player, yaw, pitch);   // continua de onde a câmera estava, sem pulo
+            viewYaw = yaw;                          // continua de onde a câmera estava, sem pulo
+            viewPitch = pitch;
         } else {
             manual = false;
             blendYaw = yaw;
@@ -205,18 +208,11 @@ public final class CameraViewClient {
     private static float getYaw(MinecraftClient mc, float td) {
         ClientPlayerEntity p = mc.player;
         if (p == null) return baseYaw;
-        if (kind == Kind.DRONE) return p.getYaw(td);                 // o drone vira para onde eu olho
+        if (kind == Kind.DRONE) return viewYaw;                      // o drone vira para onde eu olho
         if (manual) {
-            float yaw = p.getYaw(td);
-            float rel = MathHelper.wrapDegrees(yaw - baseYaw);
-            float cl = MathHelper.clamp(rel, -MANUAL_YAW_LIMIT, MANUAL_YAW_LIMIT);
-            if (cl != rel) {
-                float delta = cl - rel;
-                p.setYaw(p.getYaw() + delta);
-                p.prevYaw += delta;
-                yaw += delta;
-            }
-            return yaw;
+            float rel = MathHelper.wrapDegrees(viewYaw - baseYaw);
+            viewYaw = baseYaw + MathHelper.clamp(rel, -MANUAL_YAW_LIMIT, MANUAL_YAW_LIMIT);
+            return viewYaw;
         }
         float sweep = baseYaw + SWEEP_AMPL * (float) Math.sin(sweepPhase + td * SWEEP_STEP);
         if (blendTicks > 0) {
@@ -229,16 +225,10 @@ public final class CameraViewClient {
     private static float getPitch(MinecraftClient mc, float td) {
         ClientPlayerEntity p = mc.player;
         if (p == null) return AUTO_PITCH;
-        if (kind == Kind.DRONE) return MathHelper.clamp(p.getPitch(td), -90f, 90f);
+        if (kind == Kind.DRONE) return MathHelper.clamp(viewPitch, -90f, 90f);
         if (manual) {
-            float pitch = p.getPitch(td);
-            float cl = MathHelper.clamp(pitch, PITCH_MIN, PITCH_MAX);
-            if (cl != pitch) {
-                float delta = cl - pitch;
-                p.setPitch(p.getPitch() + delta);
-                p.prevPitch += delta;
-            }
-            return cl;
+            viewPitch = MathHelper.clamp(viewPitch, PITCH_MIN, PITCH_MAX);
+            return viewPitch;
         }
         if (blendTicks > 0) {
             float b = smooth(1f - (blendTicks - td) / BLEND_TICKS);
@@ -252,11 +242,16 @@ public final class CameraViewClient {
         return t * t * (3f - 2f * t);
     }
 
-    private static void setPlayerRot(ClientPlayerEntity p, float yaw, float pitch) {
-        float dy = yaw - p.getYaw(), dp = pitch - p.getPitch();
-        p.setYaw(yaw);
-        p.setPitch(pitch);
-        p.prevYaw += dy;
-        p.prevPitch += dp;
+    // ------------------------------------------------------------------ mouse / entrada
+
+    /** Mouse enquanto usa câmera/drone: gira só a visão (mesma sensibilidade do vanilla), nunca o jogador. */
+    public static void lookDelta(double dx, double dy) {
+        viewYaw += (float) dx * 0.15f;
+        viewPitch = MathHelper.clamp(viewPitch + (float) dy * 0.15f, -90f, 90f);
     }
+
+    public static float getViewYaw() { return viewYaw; }
+    public static float getViewPitch() { return viewPitch; }
+    public static float getInputLevel() { return inputLevel; }
+    public static void setInputLevel(float v) { inputLevel = v; }
 }

@@ -1,5 +1,5 @@
 {
-  "block.vigicam.surveillance_camera": "Surveillance Camera",
+  "block.vigicam.surveillance_camera": "Security Camera",
   "item.vigicam.drone": "Drone",
   "item.vigicam.remote": "Camera Remote",
   "entity.vigicam.drone": "Drone",

@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
@@ -37,6 +38,9 @@ public class VigiCam implements ModInitializer {
     public static final Identifier DRONE_INPUT = new Identifier(MOD_ID, "drone_input");
     public static final Identifier DRONE_RELEASE = new Identifier(MOD_ID, "drone_release");
     public static final Identifier CYCLE_DEVICE = new Identifier(MOD_ID, "cycle_device");
+    public static final Identifier VIEW_STATE = new Identifier(MOD_ID, "view_state");   // cliente -> servidor: "estou nas câmeras/drone"
+    // servidor -> clientes próximos: quem está pilotando (para as mãos nos controles)
+    public static final Identifier PILOT_SYNC = new Identifier(MOD_ID, "pilot_sync");
 
     public static final Block SURVEILLANCE_CAMERA = new SurveillanceCameraBlock(
             FabricBlockSettings.create().strength(2.0f).sounds(BlockSoundGroup.METAL).nonOpaque());
@@ -89,9 +93,26 @@ public class VigiCam implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(CYCLE_DEVICE, (server, player, handler, buf, sender) ->
                 server.execute(() -> RemoteItem.cycle(player)));
 
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                DroneControl.release(handler.getPlayer().getUuid()));
+        ServerPlayNetworking.registerGlobalReceiver(VIEW_STATE, (server, player, handler, buf, sender) -> {
+            boolean on = buf.readBoolean();
+            server.execute(() -> broadcastPilot(player, on));
+        });
+
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            DroneControl.release(handler.getPlayer().getUuid());
+            broadcastPilot(handler.getPlayer(), false);
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DroneControl.clear());
+    }
+
+    /** Avisa os jogadores que enxergam este jogador se ele está (ou não) usando câmera/drone. */
+    public static void broadcastPilot(ServerPlayerEntity p, boolean on) {
+        for (ServerPlayerEntity t : PlayerLookup.tracking(p)) {
+            PacketByteBuf b = PacketByteBufs.create();
+            b.writeUuid(p.getUuid());
+            b.writeBoolean(on);
+            ServerPlayNetworking.send(t, PILOT_SYNC, b);
+        }
     }
 
     // --- rede: servidor -> cliente ---

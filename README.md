@@ -1,6 +1,6 @@
 # VigiCam (Fabric 1.20.1)
 
-Bloco "Câmera de Vigilância". Clique direito nela e você passa a ver pelo ponto de vista da câmera
+Bloco "Câmera de Segurança". Clique direito nela e você passa a ver pelo ponto de vista da câmera
 (varrendo de um lado para o outro) com o shader **fisheye + VHS + visor da câmera** (sem tingimento verde) e HUD "LIVE".
 Shift (depois de soltar uma vez) sai da câmera.
 

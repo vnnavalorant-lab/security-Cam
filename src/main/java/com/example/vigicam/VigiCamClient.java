@@ -3,6 +3,7 @@ package com.example.vigicam;
 import com.example.vigicam.mixin.GameRendererInvoker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityModelLayerRegistry;
@@ -61,6 +62,14 @@ public class VigiCamClient implements ClientModInitializer {
         nextKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.vigicam.next_device", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "key.categories.vigicam"));
 
+        HandModels.register();
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.PILOT_SYNC, (client, handler, buf, sender) -> {
+            java.util.UUID who = buf.readUuid();
+            boolean on = buf.readBoolean();
+            client.execute(() -> PilotState.set(who, on));
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PilotState.clear());
+
         EntityModelLayerRegistry.registerModelLayer(DroneModel.LAYER, DroneModel::getTexturedModelData);
         EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);
         BlockEntityRendererFactories.register(VigiCam.CAMERA_BE, CameraBlockEntityRenderer::new);
@@ -72,6 +81,7 @@ public class VigiCamClient implements ClientModInitializer {
             client.execute(() -> {
                 boolean fresh = CameraViewClient.startBlock(client, pos, yaw, idx, cnt);
                 applyShader(client, fresh);
+                if (fresh) sendViewState(true);
             });
         });
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_DRONE, (client, handler, buf, sender) -> {
@@ -80,6 +90,7 @@ public class VigiCamClient implements ClientModInitializer {
             client.execute(() -> {
                 boolean fresh = CameraViewClient.startDrone(client, id, idx, cnt);
                 applyShader(client, fresh);
+                if (fresh) sendViewState(true);
             });
         });
 
@@ -110,7 +121,16 @@ public class VigiCamClient implements ClientModInitializer {
         ((GameRendererInvoker) mc.gameRenderer).invokeLoadPostProcessor(id);
     }
 
+    /** Avisa o servidor (que repassa aos jogadores próximos) se estou usando câmera/drone: as mãos mexem no controle. */
+    private static void sendViewState(boolean on) {
+        if (!ClientPlayNetworking.canSend(VigiCam.VIEW_STATE)) return;
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeBoolean(on);
+        ClientPlayNetworking.send(VigiCam.VIEW_STATE, buf);
+    }
+
     private static void stopView(MinecraftClient mc) {
+        sendViewState(false);
         if (CameraViewClient.isDrone()) ClientPlayNetworking.send(VigiCam.DRONE_RELEASE, PacketByteBufs.empty());
         mc.gameRenderer.disablePostProcessor();
         CameraViewClient.stop(mc);
@@ -158,12 +178,13 @@ public class VigiCamClient implements ClientModInitializer {
         float forward = (mc.options.forwardKey.isPressed() ? 1f : 0f) - (mc.options.backKey.isPressed() ? 1f : 0f);
         float strafe = (mc.options.rightKey.isPressed() ? 1f : 0f) - (mc.options.leftKey.isPressed() ? 1f : 0f);
         float vertical = (mc.options.jumpKey.isPressed() ? 1f : 0f) - (mc.options.sprintKey.isPressed() ? 1f : 0f);
+        CameraViewClient.setInputLevel(Math.max(Math.abs(forward), Math.max(Math.abs(strafe), Math.abs(vertical))));
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeFloat(forward);
         buf.writeFloat(strafe);
         buf.writeFloat(vertical);
-        buf.writeFloat(mc.player.getYaw());
-        buf.writeFloat(mc.player.getPitch());
+        buf.writeFloat(CameraViewClient.getViewYaw());      // o jogador não gira: a visão tem ângulos próprios
+        buf.writeFloat(CameraViewClient.getViewPitch());
         ClientPlayNetworking.send(VigiCam.DRONE_INPUT, buf);
     }
 

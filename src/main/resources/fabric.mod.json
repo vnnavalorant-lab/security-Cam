@@ -3,7 +3,7 @@
   "id": "vigicam",
   "version": "${version}",
   "name": "VigiCam",
-  "description": "Câmera de vigilância: ao ver pela câmera, o shader (visão noturna + VHS + fisheye) ativa durante o uso.",
+  "description": "Câmera de segurança: ao ver pela câmera, o shader (visão noturna + VHS + fisheye) ativa durante o uso.",
   "authors": ["Você"],
   "license": "MIT",
   "environment": "*",

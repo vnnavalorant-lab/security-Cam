@@ -4,12 +4,17 @@
   "package": "com.example.vigicam.mixin",
   "compatibilityLevel": "JAVA_17",
   "client": [
+    "BuiltinModelItemRendererMixin",
     "CameraMixin",
     "EntityMixin",
     "GameRendererInvoker",
     "GameRendererMixin",
+    "HeldItemFeatureRendererMixin",
+    "HeldItemRendererMixin",
+    "ItemRendererMixin",
     "KeyboardInputMixin",
     "MinecraftClientMixin",
+    "PlayerEntityModelMixin",
     "PostEffectProcessorMixin",
     "WorldRendererAccessor",
     "WorldRendererMixin"

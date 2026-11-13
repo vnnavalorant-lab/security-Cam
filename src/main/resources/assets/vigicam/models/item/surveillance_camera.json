@@ -1,4 +1,5 @@
 {
   "parent": "minecraft:item/generated",
-  "textures": { "layer0": "vigicam:item/surveillance_camera" }
+  "textures": { "layer0": "vigicam:item/surveillance_camera" },
+  "overrides": [ { "predicate": { "vigicam:hand": 1 }, "model": "vigicam:item/surveillance_camera_hand" } ]
 }

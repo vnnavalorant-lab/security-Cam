@@ -1,1 +1,5 @@
-{ "parent": "minecraft:item/handheld", "textures": { "layer0": "vigicam:item/remote" } }
+{
+  "parent": "minecraft:item/generated",
+  "textures": { "layer0": "vigicam:item/remote" },
+  "overrides": [ { "predicate": { "vigicam:hand": 1 }, "model": "vigicam:item/remote_hand" } ]
+}
