@@ -128,18 +128,76 @@ public final class HeldItemRenderers {
                 && mc.getEntityRenderDispatcher().getRenderer(mc.player) instanceof PlayerEntityRenderer pr) {
             PlayerEntityModel<AbstractClientPlayerEntity> pm = pr.getModel();
             Identifier skin = mc.player.getSkinTexture();
-            arm(m, vcp, light, skin, pm.rightArm, pm.rightSleeve, mc.player.isPartVisible(PlayerModelPart.RIGHT_SLEEVE), 1f);
-            arm(m, vcp, light, skin, pm.leftArm, pm.leftSleeve, mc.player.isPartVisible(PlayerModelPart.LEFT_SLEEVE), -1f);
+            long now = Util.getMeasuringTimeMs();
+            pollClicks(mc, now);
+            arm(m, vcp, light, skin, pm.rightArm, pm.rightSleeve, mc.player.isPartVisible(PlayerModelPart.RIGHT_SLEEVE), 1f, now - pressStartR);
+            arm(m, vcp, light, skin, pm.leftArm, pm.leftSleeve, mc.player.isPartVisible(PlayerModelPart.LEFT_SLEEVE), -1f, now - pressStartL);
         }
         m.pop();
     }
 
-    /** Braço vindo de baixo/trás da tela, com a mão encostada na ponta (lateral) do controle. */
+    // ------------------------------------------------------------------ clique = só a mão apertando a tela
+
+    /** Duração do toque, em ms. */
+    private static final long PRESS_MS = 300L;
+    /** Mão (ponta do braço) em repouso, no lado do controle; "side" = +1 direita, -1 esquerda. */
+    private static final float REST_X = 0.255f, REST_Y = -0.03f, REST_Z = 0.02f;
+    /** Mão pairando sobre o centro da tela (X é espelhado por lado). Ajuste aqui se a mão ficar longe/dentro da tela. */
+    private static final float HOVER_X = 0.09f, HOVER_Y = -0.02f, HOVER_Z = 0.16f;
+    /** Quanto a mão avança (para -Z, em direção à tela) no instante do toque. */
+    private static final float TAP_DEPTH = 0.045f;
+
+    private static long pressStartR = -10_000L, pressStartL = -10_000L;
+    private static boolean prevUse, prevAttack;
+
+    /** Botão direito (usar) -> mão direita aperta; botão esquerdo (atacar) -> mão esquerda aperta. */
+    private static void pollClicks(MinecraftClient mc, long now) {
+        boolean use = mc.options.useKey.isPressed(), atk = mc.options.attackKey.isPressed();
+        if (mc.currentScreen == null && mc.mouse.isCursorLocked()) {
+            if (use && !prevUse) pressStartR = now;
+            if (atk && !prevAttack) pressStartL = now;
+        }
+        prevUse = use;
+        prevAttack = atk;
+    }
+
+    private static float smooth(float x) { x = Math.max(0f, Math.min(1f, x)); return x * x * (3f - 2f * x); }
+
+    /** 0..1: o quanto a mão já foi do lado do controle até a tela (vai, toca, volta). */
+    private static float reach(long elapsed) {
+        if (elapsed < 0L || elapsed >= PRESS_MS) return 0f;
+        float t = elapsed / (float) PRESS_MS;
+        if (t < 0.40f) return smooth(t / 0.40f);
+        if (t < 0.60f) return 1f;
+        return 1f - smooth((t - 0.60f) / 0.40f);
+    }
+
+    /** 0..1: o "toque" em si (um empurrãozinho para a tela) no meio da animação. */
+    private static float tap(long elapsed) {
+        if (elapsed < 0L || elapsed >= PRESS_MS) return 0f;
+        float t = elapsed / (float) PRESS_MS;
+        if (t < 0.40f || t >= 0.60f) return 0f;
+        return (float) Math.sin((t - 0.40f) / 0.20f * Math.PI);
+    }
+
+    /**
+     * Braço vindo de baixo/trás da tela, com a mão encostada na ponta (lateral) do controle.
+     * O OMBRO fica sempre parado (calculado a partir da posição de repouso); no clique só a mão se move e o braço gira em torno do ombro.
+     */
     private static void arm(MatrixStack m, VertexConsumerProvider vcp, int light, Identifier skin,
-                            ModelPart arm, ModelPart sleeve, boolean sleeveOn, float side) {
-        Vector3f hand = new Vector3f(side * 0.255f, -0.03f, 0.02f);              // ponta do braço (a mão)
+                            ModelPart arm, ModelPart sleeve, boolean sleeveOn, float side, long sincePress) {
+        Vector3f rest = new Vector3f(side * REST_X, REST_Y, REST_Z);              // ponta do braço (a mão) em repouso
         Vector3f back = new Vector3f(side * 0.30f, -0.62f, 0.74f).normalize();    // da mão para o ombro
-        Vector3f shoulder = new Vector3f(back).mul(0.62f).add(hand);
+        Vector3f shoulder = new Vector3f(back).mul(0.62f).add(rest);              // fixo: não depende do clique
+
+        float r = reach(sincePress), tp = tap(sincePress);
+        Vector3f hand = new Vector3f(
+                rest.x + (side * HOVER_X - rest.x) * r,
+                rest.y + (HOVER_Y - rest.y) * r,
+                rest.z + (HOVER_Z - rest.z) * r - TAP_DEPTH * tp);
+        // mantém o comprimento do braço: só muda a direção ombro -> mão
+        Vector3f dir = new Vector3f(hand).sub(shoulder).normalize();
+        back.set(dir).negate();
 
         arm.pitch = arm.yaw = arm.roll = 0f;
         sleeve.pitch = sleeve.yaw = sleeve.roll = 0f;
