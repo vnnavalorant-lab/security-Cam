@@ -62,7 +62,9 @@ public final class AntennaNetwork {
         AmplifyingAntennaBlockEntity best = null;
         double bestD = Double.MAX_VALUE;
         for (AmplifyingAntennaBlockEntity ant : set) {
-            if (ant.isRemoved() || !owner.equals(ant.getOwner())) continue;
+            // "dono efetivo": durante uma invasão do Pendrive Hacker as antenas da vítima servem o hacker, não a vítima
+            UUID antOwner = ant.getOwner();
+            if (ant.isRemoved() || antOwner == null || !owner.equals(HackManager.effectiveOwner(antOwner))) continue;
             double d = Vec3d.ofCenter(ant.getPos()).squaredDistanceTo(p);
             if (d <= max && d < bestD) {
                 bestD = d;

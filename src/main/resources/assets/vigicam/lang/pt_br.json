@@ -8,5 +8,8 @@
   "key.vigicam.next_device": "Controle remoto: próximo dispositivo vinculado",
   "key.categories.vigicam": "Aegis - Scute60",
   "block.vigicam.amplifying_antenna": "Antena Amplificadora",
-  "block.vigicam.reinforced_door": "Porta Reforçada"
+  "block.vigicam.reinforced_door": "Porta Reforçada",
+  "item.vigicam.pendrive_hacker": "Pendrive Hacker",
+  "item.vigicam.pendrive_hacker.tooltip": "Clique direito numa Antena Amplificadora para invadir",
+  "item.vigicam.pendrive_hacker.tooltip2": "Vence o puzzle: 5 min de acesso a tudo do dono"
 }

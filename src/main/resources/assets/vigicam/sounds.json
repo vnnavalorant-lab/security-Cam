@@ -20,5 +20,14 @@
   "bio_scan_10":   { "sounds": [ { "name": "vigicam:bio_scan_10", "stream": false } ] },
   "bio_scan_11":   { "sounds": [ { "name": "vigicam:bio_scan_11", "stream": false } ] },
   "bio_fail":      { "sounds": [ { "name": "vigicam:bio_fail",    "stream": false } ] },
-  "bio_success":   { "sounds": [ { "name": "vigicam:bio_success", "stream": false } ] }
+  "bio_success":   { "sounds": [ { "name": "vigicam:bio_success", "stream": false } ] },
+  "hack_usb_connect": { "sounds": [ { "name": "vigicam:hack_usb_connect", "stream": false } ] },
+  "hack_usb_eject": { "sounds": [ { "name": "vigicam:hack_usb_eject", "stream": false } ] },
+  "hack_tick_1": { "sounds": [ { "name": "vigicam:hack_tick_1", "stream": false } ] },
+  "hack_tick_2": { "sounds": [ { "name": "vigicam:hack_tick_2", "stream": false } ] },
+  "hack_tick_3": { "sounds": [ { "name": "vigicam:hack_tick_3", "stream": false } ] },
+  "hack_stage_lock_1": { "sounds": [ { "name": "vigicam:hack_stage_lock_1", "stream": false } ] },
+  "hack_stage_lock_2": { "sounds": [ { "name": "vigicam:hack_stage_lock_2", "stream": false } ] },
+  "hack_sync_fail": { "sounds": [ { "name": "vigicam:hack_sync_fail", "stream": false } ] },
+  "hack_victory": { "sounds": [ { "name": "vigicam:hack_victory", "stream": false } ] }
 }

@@ -9,8 +9,10 @@ import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.HorizontalFacingBlock;
 import net.minecraft.block.ShapeContext;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.state.StateManager;
 import net.minecraft.util.ActionResult;
@@ -60,10 +62,25 @@ public class SurveillanceCameraBlock extends HorizontalFacingBlock implements Bl
         return new SurveillanceCameraBlockEntity(pos, state);
     }
 
+    /** Quem coloca a câmera é o dono (o Pendrive Hacker invade as coisas do dono da antena). */
+    @Override
+    public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        super.onPlaced(world, pos, state, placer, stack);
+        if (!world.isClient && placer instanceof PlayerEntity p
+                && world.getBlockEntity(pos) instanceof SurveillanceCameraBlockEntity be) {
+            be.setOwner(p.getUuid(), p.getGameProfile().getName());
+        }
+    }
+
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player,
                               Hand hand, BlockHitResult hit) {
         if (!world.isClient && player instanceof ServerPlayerEntity sp) {
+            // câmera de outro jogador: só o dono (ou quem invadiu a rede dele com o Pendrive Hacker) usa
+            if (world.getBlockEntity(pos) instanceof SurveillanceCameraBlockEntity be && !HackManager.canUse(sp, be.getOwner())) {
+                HackManager.deny(sp, be.getOwner(), be.getOwnerName());
+                return ActionResult.SUCCESS;
+            }
             if (player.getStackInHand(hand).getItem() instanceof RemoteItem) {
                 RemoteItem.connectTo(sp, player.getStackInHand(hand), RemoteItem.Link.camera(world, pos));
             } else {

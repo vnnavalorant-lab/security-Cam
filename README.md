@@ -84,3 +84,27 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 - **Segurança:** ao completar, o cliente manda `ACT_BIO_DONE`; o servidor só libera se for o dono, com a janela de biometria aberta
   (`startBiometry`) e há pelo menos 1 s. Senha certa de qualquer um fecha a janela.
 - **Sons:** `bio_scan_0..11` (um por pulso, com o tom do progresso), `bio_fail` e `bio_success`, gerados por `tools/gen_door_sounds.py`.
+
+## Pendrive Hacker
+
+- **Item:** `vigicam:pendrive_hacker` (textura `textures/item/pendrive_hacker.png`). Não se gasta. Receita **sem forma**: 1 estrela do Nether + 1 barra de netherite + 1 esmeralda
+  (`data/vigicam/recipes/pendrive_hacker.json`).
+- **Como usa:** com o pendrive em qualquer mão, clique direito numa **Antena Amplificadora de outro jogador** (a "antena/satélite"): abre o painel
+  `HackPanelScreen`, o "Terminal de Antena - Puzzle USB" do HTML (chassi octogonal, LED vermelho / âmbar-ciano / verde, visor CRT com a antena em pixel art
+  vermelha -> verde, botão AGUARDANDO USB / TRAVAR SINAL / EJETAR USB, porta USB-PORT e o pendrive verde embaixo).
+  Arraste o pendrive até a porta (ou clique nele, ou Enter/Espaço). No visor aparece a **QUEBRA DE SINAL**: 3 estágios, o cursor oscila e é preciso
+  clicar em **TRAVAR SINAL** (ou Espaço/Enter) com ele dentro da zona ciano. Cada estágio é mais rápido e com a zona mais estreita (68/102/140 %/s,
+  28/20/14 %). Errar treme o chassi, pisca o visor e **volta ao estágio 1**. Clicar no pendrive encaixado ejeta.
+- **Sons:** os mesmos do HTML, nos mesmos momentos: `hack_usb_connect`, `hack_usb_eject`, `hack_tick_1..3` (pulso ao cruzar o meio, mais agudo a cada
+  estágio), `hack_stage_lock_1/2`, `hack_sync_fail`, `hack_victory`. Gerados por `tools/gen_hack_sounds.py` (mesma escala de volume do painel da porta).
+- **Ao vencer:** por **5 minutos** (`HackManager.DURATION_SECONDS`) o hacker passa a ser o *dono efetivo* de **tudo** que o dono da antena colocou:
+  - **Portas:** abre sem senha (clicar na porta abre direto). Não troca a senha (a troca ficaria depois do acesso).
+  - **Câmeras e drones:** só o dono efetivo vê/pilota/vincula/recolhe. O dono real fica sem acesso durante a invasão e, se estava numa câmera/drone, é desconectado.
+  - **Antenas:** as antenas da vítima passam a dar o bônus de alcance (+50) aos drones do hacker, não aos da vítima.
+  - Aviso na action bar do hacker (contagem nos últimos 10 s) e no chat da vítima, no começo e no fim.
+  - Quando o tempo acaba a concessão some sozinha e tudo volta ao dono: o campo de dono guardado nos blocos/entidades **nunca é alterado**.
+  - Só uma invasão por vez por vítima; não dá para invadir a própria antena nem antenas sem dono. As concessões ficam só em memória (reiniciar o servidor encerra o acesso).
+- **Dono das câmeras e drones:** agora cada câmera e drone guarda quem o colocou (NBT `Owner`). Dispositivos de mundos antigos, sem dono, continuam livres.
+  Se preferir que câmeras e drones continuem livres para todos (e o pendrive valha só para portas e antenas), troque `HackManager.RESTRICT_ACCESS` para `false`.
+- **Segurança:** o puzzle é jogado no cliente, mas o servidor acompanha a sessão (`HACK_ACTION`: inserir / etapa / erro / ejetar): confere antena, dono, distância
+  (12 blocos), pendrive na mão, as 3 etapas em ordem e um intervalo mínimo de 250 ms entre elas. Só o servidor concede o acesso.

@@ -219,6 +219,13 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
             return ActionResult.CONSUME;
         }
 
+        // pendrive hacker: quem invadiu a rede do dono abre a porta sem senha (acesso total, sem painel)
+        if (be.hasOwner() && HackManager.isHacking(player, be.getOwnerUuid())) {
+            hackOpen(world, master, state);
+            player.sendMessage(Text.literal("§aAcesso total §7· porta aberta pelo pendrive"), true);
+            return ActionResult.CONSUME;
+        }
+
         // porta de um mundo antigo / comando: quem usar primeiro vira o dono
         if (!be.hasOwner()) {
             be.setOwner(player);
@@ -264,7 +271,9 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
                 }
             }
             case ACT_SET_PIN -> {
-                ok = be.isOwner(player) && ReinforcedDoorBlockEntity.isValidPin(pin);
+                // o hacker abre a porta, mas não troca a senha (a troca ficaria depois que o acesso acabasse)
+                ok = be.isOwner(player) && !HackManager.isHacking(player, be.getOwnerUuid())
+                        && ReinforcedDoorBlockEntity.isValidPin(pin);
                 if (ok) be.setPin(pin);
             }
             case ACT_BIO_DONE -> {
@@ -292,6 +301,13 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
     private void unlockAndOpen(World world, BlockPos master, BlockState state, PlayerEntity player) {
         apply(world, master, state, true, false);
         playExcept(world, master, player, ModSounds.DOOR_UNLOCK, 0.8f);   // quem digitou já ouviu o som no painel
+        world.scheduleBlockTick(master, this, OPEN_DELAY);
+    }
+
+    /** Igual a {@link #unlockAndOpen}, mas o som de destravar toca para todos (o hacker não tem painel que o toque). */
+    private void hackOpen(World world, BlockPos master, BlockState state) {
+        apply(world, master, state, true, false);
+        world.playSound(null, master.up(), ModSounds.DOOR_UNLOCK, SoundCategory.BLOCKS, 0.8f, 1.0f);
         world.scheduleBlockTick(master, this, OPEN_DELAY);
     }
 

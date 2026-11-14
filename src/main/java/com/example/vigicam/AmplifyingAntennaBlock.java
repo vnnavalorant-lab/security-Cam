@@ -14,6 +14,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.IntProperty;
@@ -105,11 +106,25 @@ public class AmplifyingAntennaBlock extends HorizontalFacingBlock implements Blo
                               Hand hand, BlockHitResult hit) {
         BlockPos basePos = pos.down(state.get(PART));
         if (!world.isClient && world.getBlockEntity(basePos) instanceof AmplifyingAntennaBlockEntity be) {
-            boolean mine = player.getUuid().equals(be.getOwner());
+            // pendrive hacker em qualquer mão: abre o painel do puzzle (ver HackManager)
+            if (player instanceof ServerPlayerEntity sp && HackerUsbItem.holds(sp)) {
+                HackManager.openPanel(sp, basePos);
+                return ActionResult.SUCCESS;
+            }
+            java.util.UUID real = be.getOwner();
+            HackManager.Grant hack = HackManager.activeFor(real);
             String owner = be.getOwnerName().isEmpty() ? "desconhecido" : be.getOwnerName();
-            player.sendMessage(Text.literal(mine
-                    ? "§aAntena amplificadora §7· sua · +" + (int) AntennaNetwork.RANGE_BONUS + " blocos de alcance"
-                    : "§eAntena amplificadora §7· dono: §f" + owner), true);
+            String msg;
+            if (hack != null && hack.hacker().equals(player.getUuid())) {
+                msg = "§aAntena hackeada §7· dono: §f" + owner + " §7· acesso total por " + HackManager.clock(HackManager.remainingSeconds(real));
+            } else if (hack != null && real != null && real.equals(player.getUuid())) {
+                msg = "§cAntena invadida por §f" + hack.hackerName() + " §7· volta em " + HackManager.clock(HackManager.remainingSeconds(real));
+            } else if (real != null && real.equals(player.getUuid())) {
+                msg = "§aAntena amplificadora §7· sua · +" + (int) AntennaNetwork.RANGE_BONUS + " blocos de alcance";
+            } else {
+                msg = "§eAntena amplificadora §7· dono: §f" + owner;
+            }
+            player.sendMessage(Text.literal(msg), true);
         }
         return ActionResult.SUCCESS;
     }

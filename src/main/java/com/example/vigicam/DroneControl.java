@@ -18,6 +18,10 @@ public final class DroneControl {
     private static final Map<UUID, DroneEntity> CONTROLLING = new HashMap<>();
 
     public static boolean begin(ServerPlayerEntity sp, DroneEntity drone, int index, int count) {
+        if (!HackManager.canUse(sp, drone.getOwner())) {   // drone de outro jogador (a menos que a rede dele tenha sido invadida)
+            HackManager.deny(sp, drone.getOwner(), drone.getOwnerName());
+            return false;
+        }
         UUID owner = drone.getController();
         if (owner != null && !owner.equals(sp.getUuid())) {
             if (sp.getServer() != null && sp.getServer().getPlayerManager().getPlayer(owner) != null) {

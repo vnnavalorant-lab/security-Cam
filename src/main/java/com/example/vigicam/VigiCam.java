@@ -45,6 +45,11 @@ public class VigiCam implements ModInitializer {
     public static final Identifier DOOR_PANEL = new Identifier(MOD_ID, "door_panel");
     public static final Identifier DOOR_RESULT = new Identifier(MOD_ID, "door_result");
     public static final Identifier DOOR_ACTION = new Identifier(MOD_ID, "door_action");
+    // pendrive hacker: servidor -> cliente (abre o painel / resultado / acesso revogado) e cliente -> servidor (etapas do puzzle)
+    public static final Identifier HACK_PANEL = new Identifier(MOD_ID, "hack_panel");
+    public static final Identifier HACK_RESULT = new Identifier(MOD_ID, "hack_result");
+    public static final Identifier HACK_END = new Identifier(MOD_ID, "hack_end");
+    public static final Identifier HACK_ACTION = new Identifier(MOD_ID, "hack_action");
     // servidor -> clientes próximos: quem está pilotando (para as mãos nos controles)
     public static final Identifier PILOT_SYNC = new Identifier(MOD_ID, "pilot_sync");
     // servidor -> cliente: o drone perdeu o sinal (sai da visão do drone)
@@ -74,6 +79,7 @@ public class VigiCam implements ModInitializer {
 
     public static final Item DRONE_ITEM = new DroneItem(new FabricItemSettings().maxCount(16));
     public static final Item REMOTE_ITEM = new RemoteItem(new FabricItemSettings().maxCount(1));
+    public static final Item PENDRIVE_HACKER_ITEM = new HackerUsbItem(new FabricItemSettings().maxCount(1));
 
     public static EntityType<DroneEntity> DRONE;
     public static BlockEntityType<SurveillanceCameraBlockEntity> CAMERA_BE;
@@ -105,6 +111,8 @@ public class VigiCam implements ModInitializer {
         AntennaNetwork.init();
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "drone"), DRONE_ITEM);
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "remote"), REMOTE_ITEM);
+        Registry.register(Registries.ITEM, new Identifier(MOD_ID, "pendrive_hacker"), PENDRIVE_HACKER_ITEM);
+        HackManager.init();
 
         DRONE = Registry.register(Registries.ENTITY_TYPE, new Identifier(MOD_ID, "drone"),
                 FabricEntityTypeBuilder.<DroneEntity>create(SpawnGroup.MISC, DroneEntity::new)
@@ -119,6 +127,7 @@ public class VigiCam implements ModInitializer {
             entries.add(REMOTE_ITEM);
             entries.add(AMPLIFYING_ANTENNA_ITEM);
             entries.add(REINFORCED_DOOR_ITEM);
+            entries.add(PENDRIVE_HACKER_ITEM);
         });
 
         // --- rede: cliente -> servidor ---
@@ -145,13 +154,23 @@ public class VigiCam implements ModInitializer {
             server.execute(() -> ReinforcedDoorBlock.handleAction(player, type, pos, pin));
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(HACK_ACTION, (server, player, handler, buf, sender) -> {
+            int type = buf.readByte();
+            BlockPos pos = buf.readBlockPos();
+            server.execute(() -> HackManager.handleAction(player, type, pos));
+        });
+
         ServerPlayNetworking.registerGlobalReceiver(VIEW_STATE, (server, player, handler, buf, sender) -> {
             boolean on = buf.readBoolean();
-            server.execute(() -> broadcastPilot(player, on));
+            server.execute(() -> {
+                if (!on) HackManager.clearView(player.getUuid());
+                broadcastPilot(player, on);
+            });
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             DroneControl.release(handler.getPlayer().getUuid());
+            HackManager.dropPlayer(handler.getPlayer().getUuid());
             broadcastPilot(handler.getPlayer(), false);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> DroneControl.clear());
@@ -170,6 +189,9 @@ public class VigiCam implements ModInitializer {
     // --- rede: servidor -> cliente ---
     /** index/count: posição do dispositivo na lista do controle remoto (-1/0 = sem lista). */
     public static void sendViewCamera(ServerPlayerEntity sp, BlockPos pos, float yaw, int index, int count) {
+        // o pendrive hacker precisa saber quem está olhando uma câmera de quem (para tirar da visão quando o acesso acabar)
+        java.util.UUID camOwner = sp.getServerWorld().getBlockEntity(pos) instanceof SurveillanceCameraBlockEntity cam ? cam.getOwner() : null;
+        HackManager.noteView(sp.getUuid(), camOwner);
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBlockPos(pos);
         buf.writeFloat(yaw);
@@ -183,6 +205,8 @@ public class VigiCam implements ModInitializer {
     }
 
     public static void sendViewDrone(ServerPlayerEntity sp, int entityId, int index, int count) {
+        java.util.UUID droneOwner = sp.getServerWorld().getEntityById(entityId) instanceof DroneEntity dr ? dr.getOwner() : null;
+        HackManager.noteView(sp.getUuid(), droneOwner);
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeInt(entityId);
         buf.writeInt(index);

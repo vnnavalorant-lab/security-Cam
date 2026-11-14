@@ -126,6 +126,24 @@ public class VigiCamClient implements ClientModInitializer {
             });
         });
 
+        // pendrive hacker: abre o painel do puzzle, recebe a resposta do servidor e o aviso de acesso revogado
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.HACK_PANEL, (client, handler, buf, sender) -> {
+            BlockPos pos = buf.readBlockPos();
+            client.execute(() -> client.setScreen(new HackPanelScreen(pos)));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.HACK_RESULT, (client, handler, buf, sender) -> {
+            int type = buf.readByte();
+            boolean ok = buf.readBoolean();
+            buf.readInt();   // segundos de acesso (a mensagem do servidor já informa)
+            client.execute(() -> {
+                if (client.currentScreen instanceof HackPanelScreen screen) screen.onResult(type, ok);
+            });
+        });
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.HACK_END, (client, handler, buf, sender) ->
+                client.execute(() -> {
+                    if (CameraViewClient.isActive()) stopView(client);
+                }));
+
         ClientTickEvents.END_CLIENT_TICK.register(VigiCamClient::tick);
         HudRenderCallback.EVENT.register(VigiCamClient::renderHud);
 

@@ -47,6 +47,9 @@ public class DroneEntity extends Entity {
     private static final double RETURN_SPEED = 0.25;   // velocidade de volta à base (blocos/tick)
 
     @Nullable private UUID controller;
+    /** Dono (quem colocou); null em drones antigos, que continuam livres para todos. Usado pelo Pendrive Hacker. */
+    @Nullable private UUID owner;
+    private String ownerName = "";
     private Vec3d vel = Vec3d.ZERO;
     private boolean amplified;   // servidor: há uma antena do piloto perto DO DRONE dando sinal
     /** Centro da antena que cobre o drone: o alcance ampliado (96 + 50) conta a partir dela. */
@@ -88,6 +91,10 @@ public class DroneEntity extends Entity {
     public boolean isPowered() { return this.dataTracker.get(POWERED); }
     private void setPowered(boolean v) { this.dataTracker.set(POWERED, v); }
 
+    @Nullable public UUID getOwner() { return owner; }
+    public String getOwnerName() { return ownerName; }
+    public void setOwner(UUID id, String name) { this.owner = id; this.ownerName = name; }
+
     @Nullable public UUID getController() { return controller; }
     public void setController(UUID id) {
         this.controller = id;
@@ -118,6 +125,8 @@ public class DroneEntity extends Entity {
     @Override
     protected void readCustomDataFromNbt(NbtCompound nbt) {
         if (nbt.getBoolean("HasHome")) home = new Vec3d(nbt.getDouble("HomeX"), nbt.getDouble("HomeY"), nbt.getDouble("HomeZ"));
+        owner = nbt.containsUuid("Owner") ? nbt.getUuid("Owner") : null;
+        ownerName = nbt.getString("OwnerName");
     }
 
     @Override
@@ -127,6 +136,10 @@ public class DroneEntity extends Entity {
             nbt.putDouble("HomeX", home.x);
             nbt.putDouble("HomeY", home.y);
             nbt.putDouble("HomeZ", home.z);
+        }
+        if (owner != null) {
+            nbt.putUuid("Owner", owner);
+            nbt.putString("OwnerName", ownerName);
         }
     }
 
@@ -175,6 +188,10 @@ public class DroneEntity extends Entity {
         if (stack.isEmpty()) {
             if (!client && player instanceof ServerPlayerEntity sp) {
                 if (sp.isSneaking()) {
+                    if (!HackManager.canUse(sp, owner)) {
+                        HackManager.deny(sp, owner, ownerName);
+                        return ActionResult.success(client);
+                    }
                     if (!sp.getAbilities().creativeMode) sp.getInventory().offerOrDrop(new ItemStack(VigiCam.DRONE_ITEM));
                     this.discard();
                 } else {
@@ -208,6 +225,13 @@ public class DroneEntity extends Entity {
                 pilot = null;
                 in = null;
             }
+        }
+
+        if (pilot != null && !HackManager.canUse(pilot, owner)) {   // a invasão (pendrive) acabou ou começou: o piloto perde o drone
+            DroneControl.release(controller);
+            controller = null;
+            pilot = null;
+            in = null;
         }
 
         boolean powered = isPowered();

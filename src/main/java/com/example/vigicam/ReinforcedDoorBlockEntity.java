@@ -57,8 +57,9 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
         return owner;
     }
 
+    /** Dono "efetivo": durante uma invasão do Pendrive Hacker quem manda é o hacker (o dono real volta quando o tempo acaba). */
     public boolean isOwner(PlayerEntity player) {
-        return owner != null && owner.equals(player.getUuid());
+        return HackManager.isEffectiveOwner(player, owner);
     }
 
     public void setOwner(PlayerEntity player) {

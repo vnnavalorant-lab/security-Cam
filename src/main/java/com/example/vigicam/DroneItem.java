@@ -24,6 +24,7 @@ public class DroneItem extends Item {
         if (drone == null) return ActionResult.FAIL;
         drone.refreshPositionAndAngles(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, ctx.getPlayerYaw(), 0f);
         drone.setHome(new Vec3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));   // base de retorno
+        if (ctx.getPlayer() != null) drone.setOwner(ctx.getPlayer().getUuid(), ctx.getPlayer().getGameProfile().getName());
         sw.spawnEntity(drone);
 
         PlayerEntity player = ctx.getPlayer();

@@ -97,6 +97,8 @@ public class RemoteItem extends Item {
         } else if (links.size() >= MAX_LINKS) {
             msg(sp, "§cO controle já está cheio (" + MAX_LINKS + ").");
             return;
+        } else if (!hasAccess(sp, link)) {
+            return;
         } else {
             links.add(link);
             stack.getOrCreateNbt().putInt("Sel", links.size() - 1);
@@ -141,6 +143,7 @@ public class RemoteItem extends Item {
             msg(sp, "§cDispositivo em outra dimensão.");
             return false;
         }
+        if (!hasAccess(sp, link)) return false;
         if (link.drone()) {
             Entity e = link.id() == null ? null : w.getEntity(link.id());
             if (!(e instanceof DroneEntity d) || d.isRemoved()) {
@@ -165,6 +168,29 @@ public class RemoteItem extends Item {
         DroneControl.release(sp.getUuid());
         VigiCam.sendViewCamera(sp, p, w.getBlockState(p).get(HorizontalFacingBlock.FACING).asRotation(), index, count);
         return true;
+    }
+
+    /**
+     * O jogador pode usar este dispositivo? Dispositivos de outro jogador só respondem ao dono (ou a quem invadiu a rede dele
+     * com o Pendrive Hacker, enquanto durar o acesso). Se não puder, o próprio método avisa o motivo.
+     */
+    private static boolean hasAccess(ServerPlayerEntity sp, Link link) {
+        ServerWorld w = sp.getServerWorld();
+        java.util.UUID owner = null;
+        String name = "";
+        if (link.drone()) {
+            if (link.id() != null && w.getEntity(link.id()) instanceof DroneEntity d) {
+                owner = d.getOwner();
+                name = d.getOwnerName();
+            }
+        } else if (link.pos() != null && w.isChunkLoaded(link.pos())
+                && w.getBlockEntity(link.pos()) instanceof SurveillanceCameraBlockEntity cam) {
+            owner = cam.getOwner();
+            name = cam.getOwnerName();
+        }
+        if (HackManager.canUse(sp, owner)) return true;
+        HackManager.deny(sp, owner, name);
+        return false;
     }
 
     private static void msg(ServerPlayerEntity sp, String s) { sp.sendMessage(Text.literal(s), true); }

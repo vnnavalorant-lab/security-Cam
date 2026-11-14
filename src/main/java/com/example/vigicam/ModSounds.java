@@ -35,6 +35,17 @@ public final class ModSounds {
         for (int i = 0; i < BIO_PULSES; i++) BIO_SCAN[i] = register("bio_scan_" + i);
     }
 
+    /** Pendrive hacker (mesmos sons 8-bit do "Terminal de Antena" HTML): encaixar/ejetar, pulso por estágio, estágio travado, erro e vitória. */
+    public static final SoundEvent HACK_USB_CONNECT = register("hack_usb_connect");
+    public static final SoundEvent HACK_USB_EJECT = register("hack_usb_eject");
+    public static final SoundEvent HACK_TICK_1 = register("hack_tick_1");
+    public static final SoundEvent HACK_TICK_2 = register("hack_tick_2");
+    public static final SoundEvent HACK_TICK_3 = register("hack_tick_3");
+    public static final SoundEvent HACK_STAGE_LOCK_1 = register("hack_stage_lock_1");
+    public static final SoundEvent HACK_STAGE_LOCK_2 = register("hack_stage_lock_2");
+    public static final SoundEvent HACK_SYNC_FAIL = register("hack_sync_fail");
+    public static final SoundEvent HACK_VICTORY = register("hack_victory");
+
     private ModSounds() {}
 
     private static SoundEvent register(String name) {
