@@ -15,7 +15,8 @@ import java.util.UUID;
  * <ul>
  *   <li>Servidor: guarda o dono (quem colocou a porta) e a senha de {@link #PIN_LENGTH} dígitos. Só o dono pode trocar a senha,
  *       mas a porta só abre com a senha certa, até para o dono. Se o dono errar {@link #MAX_OWNER_FAILS} vezes seguidas
- *       (esqueceu a senha) o sistema faz a "biometria" e libera. A senha nunca é enviada aos clientes.</li>
+ *       (esqueceu a senha) abre-se a "janela de biometria": durante {@link #BIOMETRY_WINDOW} ticks o painel de biometria
+ *       ({@link BiometryPanelScreen}, leitor de digital) pode liberar a porta. A senha nunca é enviada aos clientes.</li>
  *   <li>Cliente: guarda o quanto a porta já abriu (0 = fechada, 1 = aberta) para animar.</li>
  * </ul>
  */
@@ -23,6 +24,10 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
     public static final int PIN_LENGTH = 4;
     /** Erros seguidos do dono até o sistema fazer a biometria. */
     public static final int MAX_OWNER_FAILS = 3;
+    /** Quanto tempo o dono tem para fazer a leitura depois do 3º erro (60 s). */
+    public static final int BIOMETRY_WINDOW = 20 * 60;
+    /** A leitura leva 1,5 s no painel: o servidor não aceita a conclusão antes de 1 s da abertura da janela. */
+    public static final int BIOMETRY_MIN_TICKS = 20;
 
     /** Quanto o progresso anda por tick: abre/fecha em 10 ticks (0,5 s). */
     private static final float STEP = 0.1f;
@@ -33,9 +38,9 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
     private UUID owner;
     private String pin = "";
 
-    /** Só no servidor e só em memória: erros seguidos do dono e se a biometria está em andamento. */
+    /** Só no servidor e só em memória: erros seguidos do dono e o tick (do mundo) em que a janela de biometria abriu (-1 = fechada). */
     private int ownerFails;
-    private boolean biometryPending;
+    private long biometryStart = -1;
 
     public ReinforcedDoorBlockEntity(BlockPos pos, BlockState state) {
         super(VigiCam.REINFORCED_DOOR_BE, pos, state);
@@ -89,12 +94,23 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
         ownerFails = 0;
     }
 
-    public boolean isBiometryPending() {
-        return biometryPending;
+    /** Abre a janela de biometria (o dono errou a senha demais). */
+    public void startBiometry(long worldTime) {
+        biometryStart = worldTime;
     }
 
-    public void setBiometryPending(boolean pending) {
-        biometryPending = pending;
+    public void clearBiometry() {
+        biometryStart = -1;
+    }
+
+    /** A janela de biometria está aberta (e ainda não venceu)? */
+    public boolean isBiometryPending(long worldTime) {
+        return biometryStart >= 0 && worldTime - biometryStart <= BIOMETRY_WINDOW;
+    }
+
+    /** O painel pode concluir a leitura agora: janela aberta há pelo menos {@link #BIOMETRY_MIN_TICKS}. */
+    public boolean canFinishBiometry(long worldTime) {
+        return isBiometryPending(worldTime) && worldTime - biometryStart >= BIOMETRY_MIN_TICKS;
     }
 
     /** Porta sem senha (recém-colocada ou de um mundo antigo): sorteia uma, assim ninguém abre sem saber. */

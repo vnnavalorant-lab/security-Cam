@@ -6,5 +6,19 @@
   "door_key":      { "sounds": [ { "name": "vigicam:door_key",    "stream": false } ] },
   "door_clear":    { "sounds": [ { "name": "vigicam:door_clear",  "stream": false } ] },
   "door_error":    { "sounds": [ { "name": "vigicam:door_error",  "stream": false } ] },
-  "door_unlock":   { "sounds": [ { "name": "vigicam:door_unlock", "stream": false } ] }
+  "door_unlock":   { "sounds": [ { "name": "vigicam:door_unlock", "stream": false } ] },
+  "bio_scan_0":   { "sounds": [ { "name": "vigicam:bio_scan_0", "stream": false } ] },
+  "bio_scan_1":   { "sounds": [ { "name": "vigicam:bio_scan_1", "stream": false } ] },
+  "bio_scan_2":   { "sounds": [ { "name": "vigicam:bio_scan_2", "stream": false } ] },
+  "bio_scan_3":   { "sounds": [ { "name": "vigicam:bio_scan_3", "stream": false } ] },
+  "bio_scan_4":   { "sounds": [ { "name": "vigicam:bio_scan_4", "stream": false } ] },
+  "bio_scan_5":   { "sounds": [ { "name": "vigicam:bio_scan_5", "stream": false } ] },
+  "bio_scan_6":   { "sounds": [ { "name": "vigicam:bio_scan_6", "stream": false } ] },
+  "bio_scan_7":   { "sounds": [ { "name": "vigicam:bio_scan_7", "stream": false } ] },
+  "bio_scan_8":   { "sounds": [ { "name": "vigicam:bio_scan_8", "stream": false } ] },
+  "bio_scan_9":   { "sounds": [ { "name": "vigicam:bio_scan_9", "stream": false } ] },
+  "bio_scan_10":   { "sounds": [ { "name": "vigicam:bio_scan_10", "stream": false } ] },
+  "bio_scan_11":   { "sounds": [ { "name": "vigicam:bio_scan_11", "stream": false } ] },
+  "bio_fail":      { "sounds": [ { "name": "vigicam:bio_fail",    "stream": false } ] },
+  "bio_success":   { "sounds": [ { "name": "vigicam:bio_success", "stream": false } ] }
 }

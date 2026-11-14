@@ -22,6 +22,19 @@ public final class ModSounds {
     public static final SoundEvent DOOR_ERROR = register("door_error");
     public static final SoundEvent DOOR_UNLOCK = register("door_unlock");
 
+    /**
+     * Painel de biometria (leitor de digital): um pulso 8-bit a cada 135 ms durante a leitura, cada vez mais agudo
+     * (BIO_SCAN[i] é o pulso com o tom do progresso i * 135 / 1500 do HTML), o erro ao soltar cedo e o arpejo de sucesso.
+     */
+    public static final int BIO_PULSES = 12;
+    public static final SoundEvent[] BIO_SCAN = new SoundEvent[BIO_PULSES];
+    public static final SoundEvent BIO_FAIL = register("bio_fail");
+    public static final SoundEvent BIO_SUCCESS = register("bio_success");
+
+    static {
+        for (int i = 0; i < BIO_PULSES; i++) BIO_SCAN[i] = register("bio_scan_" + i);
+    }
+
     private ModSounds() {}
 
     private static SoundEvent register(String name) {

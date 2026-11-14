@@ -71,3 +71,16 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 - **Quadro (`blocks`):** os cubos `block` do grupo `blocks` usam a textura do bloco vizinho (esquerda, direita, em cima ou embaixo, o primeiro encontrado, em ladrilhos de 16 px); sem bloco vizinho ficam invisíveis. No item da mão o quadro usa a textura do próprio modelo.
 - **Modelo:** `reinforced_door.bbmodel` -> `geo/reinforced_door.geo.json`, textura `textures/entity/reinforced_door.png`, animações `animations/reinforced_door.animation.json` (`on` esconde as luzes `locked`/`locked2`; `off` esconde `unlocked`/`unlocked2`/`green`/`green2`). Desenho em `ReinforcedDoorRenderer`.
 - Receita (ajuste em `data/vigicam/recipes/reinforced_door.json`): 5 ferros, 1 porta de ferro, 2 blocos de ferro, 1 redstone (III / IDI / BRB).
+
+## Painel de Biometria (leitor de digital)
+
+- **Quando aparece:** o dono que erra a senha `MAX_OWNER_FAILS` (3) vezes seguidas no teclado tem o painel trocado por `BiometryPanelScreen`
+  (inspirado no "Terminal Biométrico Minecraft" em HTML: mesmo chassi octogonal, LED de 3 estados, visor com scanlines, cadeado pixel-art,
+  barra de progresso e, embaixo, o leitor em relevo com sensor de vidro, digital em pixel art e laser). Clicar na porta de novo dentro da
+  janela de 60 s abre direto o leitor.
+- **Como usa:** **segure** o leitor (botão esquerdo do mouse, ou Espaço/Enter) por 1,5 s. Âmbar "LENDO...", a digital acende de cima para baixo
+  em ciano, um pulso 8-bit a cada 135 ms cada vez mais agudo. Soltar antes = erro, "LEITURA FALHOU", tremor e volta a trancado em 0,42 s.
+  Completo = verde "ACESSO LIBERADO" / "DIGITAL VALIDADA"; a tela fecha após 3 s (no HTML é o momento em que ele trancaria de novo).
+- **Segurança:** ao completar, o cliente manda `ACT_BIO_DONE`; o servidor só libera se for o dono, com a janela de biometria aberta
+  (`startBiometry`) e há pelo menos 1 s. Senha certa de qualquer um fecha a janela.
+- **Sons:** `bio_scan_0..11` (um por pulso, com o tom do progresso), `bio_fail` e `bio_success`, gerados por `tools/gen_door_sounds.py`.

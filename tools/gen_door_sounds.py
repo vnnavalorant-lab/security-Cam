@@ -1,4 +1,8 @@
-"""Reproduz o MinecraftSoundFX do painel HTML (Web Audio) em .wav -> .ogg. Rode na raiz do projeto."""
+"""Reproduz o MinecraftSoundFX dos painéis HTML (Web Audio) em .wav -> .ogg. Rode na raiz do projeto.
+
+Painel de senha (teclado): door_key, door_clear, door_error, door_unlock.
+Painel de biometria (leitor de digital): bio_scan_0..11 (pulso de leitura, sobe de tom com o progresso), bio_fail, bio_success.
+"""
 import math, wave, struct, subprocess, os
 SR = 44100
 
@@ -46,8 +50,30 @@ for i, fr in enumerate([587.33, 783.99, 1046.50, 1318.51]):
     v.append(('triangle', [(s, fr)], s, s + 0.23, 0.1, s + 0.22))
 sounds['door_unlock'] = render(0.5, v)
 
+# a escala de volume vem só dos 4 sons do teclado: assim os sons novos entram na mesma escala sem mexer nos antigos
 peak = max(abs(x) for s in sounds.values() for x in s)
 gain = 0.6 / peak          # mesma escala para todos: o balanço entre eles fica igual ao do painel
+
+# ---- painel de biometria (BiometricSoundFX do HTML) ----
+# playScanPulse(progress): quadrada, 340 + 520*p Hz e +90 Hz aos 25 ms; ganho 0.055 -> 0.001 em 55 ms; dura 60 ms.
+# O HTML dispara um pulso a cada 135 ms (o primeiro em p = 0) durante a leitura de 1,5 s: 12 pulsos, cada um com o seu tom.
+BIO_PULSES, BIO_PULSE_MS, BIO_SCAN_MS = 12, 135, 1500
+for i in range(BIO_PULSES):
+    p = min(1.0, i * BIO_PULSE_MS / BIO_SCAN_MS)
+    base = 340 + p * 520
+    sounds[f'bio_scan_{i}'] = render(0.06, [('square', [(0, base), (0.025, base + 90)], 0, 0.06, 0.055, 0.055)])
+# playCancelError: dois dentes de serra (165 Hz e 115 Hz), 110 ms cada
+v = []
+for i, fr in enumerate([165, 115]):
+    s = i * 0.11
+    v.append(('sawtooth', [(s, fr)], s, s + 0.11, 0.09, s + 0.10))
+sounds['bio_fail'] = render(0.22, v)
+# playSuccess: arpejo triangular (ganho 0.11), mais cheio que o do teclado
+v = []
+for i, fr in enumerate([587.33, 783.99, 1046.50, 1318.51]):
+    s = i * 0.065
+    v.append(('triangle', [(s, fr)], s, s + 0.23, 0.11, s + 0.22))
+sounds['bio_success'] = render(0.425, v)
 outdir = 'src/main/resources/assets/vigicam/sounds'
 os.makedirs(outdir, exist_ok=True)
 for name, data in sounds.items():

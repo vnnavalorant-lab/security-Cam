@@ -30,7 +30,7 @@ import java.util.List;
  *       cadastrada abre; quem decide é o servidor.</li>
  *   <li>Dono: vê o botão extra [SENHA] (troca a senha). Os outros jogadores nem recebem esse botão.</li>
  *   <li>Dono que erra {@link ReinforcedDoorBlockEntity#MAX_OWNER_FAILS} vezes seguidas: o servidor avisa
- *       ({@link ReinforcedDoorBlock#ACT_BIOMETRY}) e o visor mostra "FAZENDO BIOMETRIA" até a porta liberar. Não há GUI própria.</li>
+ *       ({@link ReinforcedDoorBlock#ACT_BIOMETRY}) e este painel dá lugar ao {@link BiometryPanelScreen} (leitor de digital).</li>
  * </ul>
  */
 @Environment(EnvType.CLIENT)
@@ -41,9 +41,9 @@ public class DoorPanelScreen extends Screen {
     private static final int PIN = ReinforcedDoorBlockEntity.PIN_LENGTH;
 
     /** Perfis dos recortes em escada: pares {até a linha (distância da borda), recuo}. Medidas do clip-path do HTML, na metade. */
-    private static final int[] OUTER = {4, 12, 8, 8, 12, 4};
-    private static final int[] BEVEL = {4, 11, 7, 7, 11, 4};
-    private static final int[] BODY = {3, 10, 6, 6, 10, 3};
+    static final int[] OUTER = {4, 12, 8, 8, 12, 4};
+    static final int[] BEVEL = {4, 11, 7, 7, 11, 4};
+    static final int[] BODY = {3, 10, 6, 6, 10, 3};
 
     private enum Mode { NORMAL, CHANGE }
 
@@ -54,8 +54,7 @@ public class DoorPanelScreen extends Screen {
         //   LED/texto, LED claro, LED escuro, texto da senha, cadeado claro, cadeado sombra, buraco, fundo do visor (de fora pra dentro)
         RED(0xFF2A2A, 0xFF7A7A, 0xA80000, 0xFF4D4D, 0xFF7878, 0xB80000, 0x120404, new int[]{0x0D0303, 0x150505, 0x1D0707, 0x240808}),
         GREEN(0x00FF44, 0x8CFFAA, 0x009929, 0x00FF44, 0x9EFFB8, 0x009E2A, 0x041408, new int[]{0x030D06, 0x06180B, 0x082210, 0x092912}),
-        AMBER(0xFFB000, 0xFFE08A, 0xA06E00, 0xFFB84D, 0xFFD97A, 0xA87000, 0x140E03, new int[]{0x0D0903, 0x171004, 0x211705, 0x2A1D06}),
-        CYAN(0x2AD4FF, 0x9BE9FF, 0x0077A0, 0x4DDCFF, 0x7AE4FF, 0x0090B8, 0x04121A, new int[]{0x030A0D, 0x061218, 0x081B24, 0x0A242F});
+        AMBER(0xFFB000, 0xFFE08A, 0xA06E00, 0xFFB84D, 0xFFD97A, 0xA87000, 0x140E03, new int[]{0x0D0903, 0x171004, 0x211705, 0x2A1D06});
 
         final int main, ledLight, ledDark, text, lockLight, lockShade, key;
         final int[] bg;
@@ -67,7 +66,7 @@ public class DoorPanelScreen extends Screen {
     }
 
     /** Cadeado em pixel art 16x16 (A = cor, H = brilho, S = sombra, K = buraco da chave). Os mesmos 16x16 do SVG do HTML. */
-    private static final String[] LOCK_CLOSED = {
+    static final String[] LOCK_CLOSED = {
             "................",
             "......HHHH......",
             ".....AAAAAA.....",
@@ -84,7 +83,7 @@ public class DoorPanelScreen extends Screen {
             "...AAAAAAAAAA...",
             "...SSSSSSSSSS...",
             "................"};
-    private static final String[] LOCK_OPEN = {
+    static final String[] LOCK_OPEN = {
             "......HHHH......",
             ".....AA..AA.....",
             "....AA....AA....",
@@ -124,8 +123,8 @@ public class DoorPanelScreen extends Screen {
     private final StringBuilder input = new StringBuilder();
 
     private Mode mode = Mode.NORMAL;
-    private boolean unlocked, waiting, biometry;
-    private long validateAt, errStart, errUntil, savedUntil, closeAt, waitDeadline, pressedUntil, bioStart, bioDeadline;
+    private boolean unlocked, waiting;
+    private long validateAt, errStart, errUntil, savedUntil, closeAt, waitDeadline, pressedUntil;
     private String pressedId = "";
 
     private float scale = 1f;
@@ -168,16 +167,8 @@ public class DoorPanelScreen extends Screen {
         waiting = false;
         long now = now();
         if (type == ReinforcedDoorBlock.ACT_BIOMETRY) {
-            // o dono errou demais: o servidor está fazendo a biometria e mandará o "liberado" quando terminar
-            if (ok) {
-                biometry = true;
-                bioStart = now;
-                bioDeadline = now + 8000;
-                input.setLength(0);
-                validateAt = 0;
-                errUntil = 0;
-                sound(ModSounds.DOOR_KEY);
-            }
+            // o dono errou demais: o teclado dá lugar ao leitor de digital (o servidor já abriu a janela de biometria)
+            if (ok) client().setScreen(new BiometryPanelScreen(pos));
         } else if (type == ReinforcedDoorBlock.ACT_SET_PIN) {
             if (ok) {
                 sound(ModSounds.DOOR_UNLOCK);
@@ -186,7 +177,6 @@ public class DoorPanelScreen extends Screen {
                 mode = Mode.NORMAL;
             } else error();
         } else if (ok) {
-            biometry = false;
             unlocked = true;
             sound(ModSounds.DOOR_UNLOCK);
             closeAt = now + 1100;
@@ -201,13 +191,17 @@ public class DoorPanelScreen extends Screen {
         return Util.getMeasuringTimeMs();
     }
 
+    private static MinecraftClient client() {
+        return MinecraftClient.getInstance();
+    }
+
     private static void sound(SoundEvent event) {
         MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(event, 1.0f, 1.0f));
     }
 
-    /** Painel travado: já abriu ou a biometria está rodando. */
+    /** Painel travado: a porta já abriu. */
     private boolean locked() {
-        return unlocked || biometry;
+        return unlocked;
     }
 
     private boolean errActive(long now) {
@@ -287,7 +281,6 @@ public class DoorPanelScreen extends Screen {
             input.setLength(0);
         }
         if (waiting && now > waitDeadline) waiting = false;
-        if (biometry && now > bioDeadline) biometry = false;   // o servidor cancelou (ex.: o dono se afastou)
         if (closeAt > 0 && now >= closeAt) close();
     }
 
@@ -336,7 +329,6 @@ public class DoorPanelScreen extends Screen {
 
     private Theme theme(long now) {
         if (unlocked) return Theme.GREEN;
-        if (biometry) return Theme.CYAN;
         if (errActive(now)) return Theme.RED;
         if (now < savedUntil) return Theme.GREEN;
         if (mode == Mode.CHANGE) return Theme.AMBER;
@@ -345,17 +337,16 @@ public class DoorPanelScreen extends Screen {
 
     private String status(long now) {
         if (unlocked) return "ACESSO LIBERADO";
-        if (biometry) return "FAZENDO BIOMETRIA";
         if (errActive(now)) return "ACESSO NEGADO";
         if (now < savedUntil) return "SENHA SALVA";
         if (mode == Mode.CHANGE) return "NOVA SENHA";
         return "TRANCADO";
     }
 
-    /** Cadeado aberto: liberado, senha salva ou modo de troca de senha. Na biometria e no erro continua fechado. */
+    /** Cadeado aberto: liberado, senha salva ou modo de troca de senha. No erro continua fechado. */
     private boolean lockOpen(long now) {
         if (unlocked) return true;
-        if (biometry || errActive(now)) return false;
+        if (errActive(now)) return false;
         return now < savedUntil || mode == Mode.CHANGE;
     }
 
@@ -472,37 +463,30 @@ public class DoorPanelScreen extends Screen {
 
         drawLock(c, lockOpen(now), th, (W - 48) / 2, 62);
 
-        if (biometry) drawScan(c, now, th, x0, y0, x1, y1);
-
         c.drawCenteredTextWithShadow(this.textRenderer, status(now), W / 2, 45, argb(0xFF, th.main));
         c.drawCenteredTextWithShadow(this.textRenderer, pinText(now), W / 2, 118, argb(0xFF, th.text));
     }
 
-    /** Faixa de "leitura" que desce pelo visor durante a biometria (só o desenho; não existe tela de biometria). */
-    private void drawScan(DrawContext c, long now, Theme th, int x0, int y0, int x1, int y1) {
-        float p = ((now - bioStart) % 1100) / 1100f;
-        int y = y0 + 4 + (int) (p * (y1 - y0 - 10));
-        c.fill(x0 + 8, y - 4, x1 - 8, y - 2, argb(0x18, th.main));
-        c.fill(x0 + 8, y - 2, x1 - 8, y, argb(0x30, th.main));
-        c.fill(x0 + 8, y, x1 - 8, y + 2, argb(0xC8, th.main));
-    }
-
     private String pinText(long now) {
-        int filled = biometry ? (int) (((now - bioStart) / 450) % (PIN + 1)) : input.length();
+        int filled = input.length();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < PIN; i++) {
             if (i > 0) sb.append(' ');
             if (unlocked) sb.append('*');
-            else if (i < filled) sb.append(mode == Mode.CHANGE && !biometry ? input.charAt(i) : '*');   // ao trocar a senha o dono vê o que digita
+            else if (i < filled) sb.append(mode == Mode.CHANGE ? input.charAt(i) : '*');   // ao trocar a senha o dono vê o que digita
             else sb.append('_');
         }
         return sb.toString();
     }
 
     private void drawLock(DrawContext c, boolean open, Theme th, int lx, int ly) {
-        String[] g = open ? LOCK_OPEN : LOCK_CLOSED;
+        drawLock(c, open ? LOCK_OPEN : LOCK_CLOSED, th.main, th.lockLight, th.lockShade, th.key, lx, ly);
+    }
+
+    /** Cadeado 16x16 (3 px por quadradinho) com o brilho em 2 camadas. Cores RGB: cor, brilho, sombra e buraco da chave. */
+    static void drawLock(DrawContext c, String[] g, int main, int light, int shade, int key, int lx, int ly) {
         for (int layer = 2; layer >= 1; layer--) {   // brilho: o desenho "engordado" em 2 camadas translúcidas
-            int color = argb(layer == 2 ? 0x12 : 0x1C, th.main);
+            int color = argb(layer == 2 ? 0x12 : 0x1C, main);
             for (int r = -layer; r < 16 + layer; r++) {
                 int start = Integer.MIN_VALUE;
                 for (int col = -layer; col <= 16 + layer; col++) {
@@ -523,10 +507,10 @@ public class DoorPanelScreen extends Screen {
                 while (end < 16 && g[r].charAt(end) == ch) end++;
                 if (ch != '.') {
                     int rgb = switch (ch) {
-                        case 'H' -> th.lockLight;
-                        case 'S' -> th.lockShade;
-                        case 'K' -> th.key;
-                        default -> th.main;
+                        case 'H' -> light;
+                        case 'S' -> shade;
+                        case 'K' -> key;
+                        default -> main;
                     };
                     c.fill(lx + col * 3, ly + r * 3, lx + end * 3, ly + (r + 1) * 3, argb(0xFF, rgb));
                 }
@@ -575,12 +559,12 @@ public class DoorPanelScreen extends Screen {
     }
 
     /** Parafuso quadrado 5x5 (borda #38383E, miolo #1A1A1D), como o .mc-screw do HTML. */
-    private static void screw(DrawContext c, int x, int y) {
+    static void screw(DrawContext c, int x, int y) {
         c.fill(x, y, x + 5, y + 5, 0xFF38383E);
         c.fill(x + 1, y + 1, x + 4, y + 4, 0xFF1A1A1D);
     }
 
-    private static int argb(int alpha, int rgb) {
+    static int argb(int alpha, int rgb) {
         return (alpha << 24) | (rgb & 0xFFFFFF);
     }
 
@@ -593,12 +577,12 @@ public class DoorPanelScreen extends Screen {
     }
 
     /** Retângulo com os 4 cantos cortados em escada (o clip-path octogonal do chassi). */
-    private static void oct(DrawContext c, int x, int y, int w, int h, int[] profile, int color) {
+    static void oct(DrawContext c, int x, int y, int w, int h, int[] profile, int color) {
         clipFill(c, x, y, w, h, profile, x, y, x + w, y + h, color);
     }
 
     /** Preenche o retângulo {@code [rx0,rx1) x [ry0,ry1)} apenas onde ele cai dentro da forma em escada (x, y, w, h, profile). */
-    private static void clipFill(DrawContext c, int x, int y, int w, int h, int[] profile,
+    static void clipFill(DrawContext c, int x, int y, int w, int h, int[] profile,
                                  int rx0, int ry0, int rx1, int ry1, int color) {
         boolean open = false;
         int runY = 0, runX0 = 0, runX1 = 0;
