@@ -148,7 +148,21 @@ public final class GeoModel {
     /** Igual ao anterior, com cor/alpha por vértice (0-255): usado nas camadas brilhantes (LEDs) que pulsam. */
     public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw,
                        int r, int gr, int b, int a) {
-        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, false);
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, false, null);
+    }
+
+    /** Transformações por osso (animações): deixa quem chama girar/escalar/esconder cada grupo pelo nome. */
+    public interface BoneHandler {
+        /** Aplica a transformação do osso na matriz (já no pivô em pixels); devolve false para esconder o osso e seus filhos. */
+        boolean transform(String bone, MatrixStack m, float px, float py, float pz);
+
+        /** Se os cubos do próprio osso entram nesta passada (os filhos são decididos por eles mesmos). */
+        default boolean drawCubes(String bone) { return true; }
+    }
+
+    /** Desenha o modelo deixando o {@code handler} animar os ossos (porta: pivô "door", luzes por escala). */
+    public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, BoneHandler handler) {
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, 0f, 255, 255, 255, 255, false, handler);
     }
 
     /**
@@ -157,12 +171,16 @@ public final class GeoModel {
      */
     public void renderHull(MatrixStack matrices, VertexConsumer vc, int light, int overlay, float rootYaw,
                            int r, int gr, int b, int a) {
-        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, true);
+        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, rootYaw, r, gr, b, a, true, null);
     }
 
     private void renderGroup(Group g, MatrixStack m, VertexConsumer vc, int light, int overlay, float rootYaw,
-                             int cr, int cg, int cb, int ca, boolean hullPass) {
+                             int cr, int cg, int cb, int ca, boolean hullPass, BoneHandler handler) {
         m.push();
+        if (handler != null && !handler.transform(g.name, m, g.px, g.py, g.pz)) {
+            m.pop();
+            return;
+        }
         if (ROOT.equals(g.name)) {
             m.translate(g.px, g.py, g.pz);
             m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rootYaw));
@@ -171,8 +189,9 @@ public final class GeoModel {
         MatrixStack.Entry e = m.peek();
         Matrix4f pos = e.getPositionMatrix();
         Matrix3f nrm = e.getNormalMatrix();
+        boolean draw = handler == null || handler.drawCubes(g.name);
         for (Quad q : g.quads) {
-            if (q.hull != hullPass) continue;
+            if (!draw || q.hull != hullPass) continue;
             for (int i = 0; i < 4; i++) {
                 vc.vertex(pos, q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2])
                         .color(cr, cg, cb, ca)
@@ -183,7 +202,7 @@ public final class GeoModel {
                         .next();
             }
         }
-        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw, cr, cg, cb, ca, hullPass);
+        for (Group c : g.children) renderGroup(c, m, vc, light, overlay, rootYaw, cr, cg, cb, ca, hullPass, handler);
         m.pop();
     }
 }

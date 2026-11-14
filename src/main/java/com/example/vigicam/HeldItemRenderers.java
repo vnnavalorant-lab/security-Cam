@@ -94,6 +94,17 @@ public final class HeldItemRenderers {
         m.pop();
     }
 
+    // ------------------------------------------------------------------ porta reforçada (modelo 3D)
+
+    /** Mesmo quadro da câmera/antena: posição/escala/rotação vêm só do "display" do JSON. Mostra a porta travada e fechada. */
+    public static void reinforcedDoor(ModelTransformationMode mode, MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {
+        m.push();
+        m.translate(0.5, 0.51, 0.5);
+        m.scale(1f / 16f, 1f / 16f, 1f / 16f);
+        ReinforcedDoorRenderer.draw(m, vcp, light, overlay, false, 0f);
+        m.pop();
+    }
+
     // ------------------------------------------------------------------ controle remoto (modelo 3D)
 
     private static void renderRemote(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay) {

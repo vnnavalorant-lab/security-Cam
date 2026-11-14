@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "vigicam:block/reinforced_door"
+    }
+  }
+}

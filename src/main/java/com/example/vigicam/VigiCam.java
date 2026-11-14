@@ -57,6 +57,12 @@ public class VigiCam implements ModInitializer {
     public static final BlockItem AMPLIFYING_ANTENNA_ITEM =
             new BlockItem(AMPLIFYING_ANTENNA, new FabricItemSettings());
 
+    /** Porta Reforçada 3x3x1: só quebra com picareta de diamante (tags mineable/pickaxe + needs_diamond_tool, requiresTool). */
+    public static final Block REINFORCED_DOOR = new ReinforcedDoorBlock(
+            FabricBlockSettings.create().strength(50.0f, 1200.0f).requiresTool().sounds(BlockSoundGroup.METAL).nonOpaque());
+    public static final BlockItem REINFORCED_DOOR_ITEM =
+            new BlockItem(REINFORCED_DOOR, new FabricItemSettings());
+
     // partículas do sinal da antena (desenhadas no cliente por SignalParticle)
     public static final DefaultParticleType SIGNAL_WAVE = FabricParticleTypes.simple();
     public static final DefaultParticleType SIGNAL_GLOW = FabricParticleTypes.simple();
@@ -68,6 +74,7 @@ public class VigiCam implements ModInitializer {
     public static EntityType<DroneEntity> DRONE;
     public static BlockEntityType<SurveillanceCameraBlockEntity> CAMERA_BE;
     public static BlockEntityType<AmplifyingAntennaBlockEntity> ANTENNA_BE;
+    public static BlockEntityType<ReinforcedDoorBlockEntity> REINFORCED_DOOR_BE;
 
     @Override
     public void onInitialize() {
@@ -83,6 +90,11 @@ public class VigiCam implements ModInitializer {
         Registry.register(Registries.ITEM, antennaId, AMPLIFYING_ANTENNA_ITEM);
         ANTENNA_BE = Registry.register(Registries.BLOCK_ENTITY_TYPE, antennaId,
                 FabricBlockEntityTypeBuilder.create(AmplifyingAntennaBlockEntity::new, AMPLIFYING_ANTENNA).build());
+        Identifier doorId = new Identifier(MOD_ID, "reinforced_door");
+        Registry.register(Registries.BLOCK, doorId, REINFORCED_DOOR);
+        Registry.register(Registries.ITEM, doorId, REINFORCED_DOOR_ITEM);
+        REINFORCED_DOOR_BE = Registry.register(Registries.BLOCK_ENTITY_TYPE, doorId,
+                FabricBlockEntityTypeBuilder.create(ReinforcedDoorBlockEntity::new, REINFORCED_DOOR).build());
         Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_wave"), SIGNAL_WAVE);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_glow"), SIGNAL_GLOW);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier(MOD_ID, "signal_spark"), SIGNAL_SPARK);
@@ -102,6 +114,7 @@ public class VigiCam implements ModInitializer {
             entries.add(DRONE_ITEM);
             entries.add(REMOTE_ITEM);
             entries.add(AMPLIFYING_ANTENNA_ITEM);
+            entries.add(REINFORCED_DOOR_ITEM);
         });
 
         // --- rede: cliente -> servidor ---

@@ -1,0 +1,59 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "on": {
+      "loop": false,
+      "animation_length": 0,
+      "bones": {
+        "locked": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "locked2": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "off": {
+      "loop": false,
+      "animation_length": 0,
+      "bones": {
+        "unlocked2": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "unlocked": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "green": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "green2": {
+          "scale": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  }
+}

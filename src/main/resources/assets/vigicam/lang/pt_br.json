@@ -7,5 +7,6 @@
   "key.vigicam.toggle_manual": "Câmera: mover visão manualmente / varredura automática",
   "key.vigicam.next_device": "Controle remoto: próximo dispositivo vinculado",
   "key.categories.vigicam": "Aegis - Scute60",
-  "block.vigicam.amplifying_antenna": "Antena Amplificadora"
+  "block.vigicam.amplifying_antenna": "Antena Amplificadora",
+  "block.vigicam.reinforced_door": "Porta Reforçada"
 }

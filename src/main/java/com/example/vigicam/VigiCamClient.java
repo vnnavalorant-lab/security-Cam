@@ -74,6 +74,7 @@ public class VigiCamClient implements ClientModInitializer {
         EntityRendererRegistry.register(VigiCam.DRONE, DroneEntityRenderer::new);
         BlockEntityRendererFactories.register(VigiCam.CAMERA_BE, CameraBlockEntityRenderer::new);
         BlockEntityRendererFactories.register(VigiCam.ANTENNA_BE, AntennaBlockEntityRenderer::new);
+        BlockEntityRendererFactories.register(VigiCam.REINFORCED_DOOR_BE, ReinforcedDoorRenderer::new);
 
         // partículas de sinal da antena (desenho próprio, brilho aditivo)
         net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry pfr =
