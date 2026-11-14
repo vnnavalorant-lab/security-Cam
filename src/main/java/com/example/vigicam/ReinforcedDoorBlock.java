@@ -49,8 +49,10 @@ import org.jetbrains.annotations.Nullable;
  *   <li>Só quebra com picareta de diamante (ou melhor): tags mineable/pickaxe + needs_diamond_tool e requiresTool().</li>
  *   <li>Travada ou só destravada (fechada) = parede sólida. Só depois de aberta (pivô "door" girado) o vão fica livre.</li>
  *   <li>Porta fechada (sempre travada): clique direito abre o painel de senha (DoorPanelScreen). Senha certa destrava (luzes verdes,
- *       animação "on") e, meio segundo depois, abre girando o pivô "door".</li>
- *   <li>Dono (quem colocou): abre sem senha e é o único que vê o botão de trocar a senha no painel.</li>
+ *       animação "on") e, meio segundo depois, abre girando o pivô "door". Só a senha cadastrada abre: nem o dono abre com outra.</li>
+ *   <li>Dono (quem colocou): é o único que vê o botão de trocar a senha no painel. Se esquecer a senha e errar
+ *       {@link ReinforcedDoorBlockEntity#MAX_OWNER_FAILS} vezes seguidas, o painel mostra "FAZENDO BIOMETRIA" e a porta libera o
+ *       acesso (sem GUI de biometria).</li>
  *   <li>Porta aberta: clique direito fecha e trava de novo (animação "off", luzes vermelhas).</li>
  * </ul>
  * O eixo da largura do modelo (+x do .geo.json) aponta para {@code FACING.rotateYClockwise()}.
@@ -190,9 +192,13 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
     // ------------------------------------------------------------------ uso: painel de senha
 
     /** Tipos de ação do cliente (pacote DOOR_ACTION). */
-    public static final int ACT_TRY_PIN = 0, ACT_OWNER_OPEN = 1, ACT_SET_PIN = 2;
+    public static final int ACT_TRY_PIN = 0, ACT_SET_PIN = 2;
+    /** Só servidor -> cliente: o dono errou demais e a biometria começou. (1 era o antigo "abrir sem senha": não existe mais.) */
+    public static final int ACT_BIOMETRY = 3;
     /** Ticks entre as luzes ficarem verdes e a porta começar a abrir. */
     private static final int OPEN_DELAY = 10;
+    /** Duração da "biometria" (2,5 s) antes de liberar o dono. */
+    private static final int BIOMETRY_DELAY = 50;
     private static final double MAX_USE_DIST_SQ = 12 * 12;
 
     @Override
@@ -236,24 +242,36 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
         if (state.get(COL) != 1 || state.get(ROW) != 0 || state.get(OPEN)) return;
         if (!(world.getBlockEntity(pos) instanceof ReinforcedDoorBlockEntity be)) return;
 
+        if (be.isBiometryPending()) return;   // biometria em andamento: o painel fica travado
+
         boolean ok = false;
         switch (type) {
             case ACT_TRY_PIN -> {
-                ok = be.isOwner(player) || be.checkPin(pin);
-                if (ok) door.unlockAndOpen(world, pos, state, player);
-                else playExcept(world, pos, player, ModSounds.DOOR_ERROR, 0.5f);
-            }
-            case ACT_OWNER_OPEN -> {
-                ok = be.isOwner(player);
-                if (ok) door.unlockAndOpen(world, pos, state, player);
+                // vale para todo mundo, dono inclusive: só a senha cadastrada abre
+                ok = be.checkPin(pin);
+                if (ok) {
+                    be.resetOwnerFails();
+                    door.unlockAndOpen(world, pos, state, player);
+                } else if (be.isOwner(player) && be.registerOwnerFail()) {
+                    // dono errou 3 vezes seguidas: o sistema faz a biometria e libera
+                    be.setBiometryPending(true);
+                    world.scheduleBlockTick(pos, door, BIOMETRY_DELAY);
+                    sendResult(player, ACT_BIOMETRY, true);
+                    return;
+                } else {
+                    playExcept(world, pos, player, ModSounds.DOOR_ERROR, 0.5f);
+                }
             }
             case ACT_SET_PIN -> {
                 ok = be.isOwner(player) && ReinforcedDoorBlockEntity.isValidPin(pin);
                 if (ok) be.setPin(pin);
             }
-            default -> { return; }
+            default -> { return; }   // inclui o antigo "abrir sem senha": ignorado
         }
+        sendResult(player, type, ok);
+    }
 
+    private static void sendResult(ServerPlayerEntity player, int type, boolean ok) {
         PacketByteBuf out = PacketByteBufs.create();
         out.writeByte(type);
         out.writeBoolean(ok);
@@ -269,6 +287,18 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
 
     @Override
     public void scheduledTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
+        if (state.get(COL) == 1 && state.get(ROW) == 0 && world.getBlockEntity(pos) instanceof ReinforcedDoorBlockEntity be
+                && be.isBiometryPending()) {
+            // fim da biometria: libera o dono (se ele sumiu ou se afastou, cancela e a porta continua trancada)
+            be.setBiometryPending(false);
+            if (state.get(OPEN) || be.getOwnerUuid() == null) return;
+            ServerPlayerEntity owner = world.getServer().getPlayerManager().getPlayer(be.getOwnerUuid());
+            if (owner == null || owner.getWorld() != world
+                    || owner.squaredDistanceTo(Vec3d.ofCenter(pos).add(0, 1, 0)) > MAX_USE_DIST_SQ) return;
+            unlockAndOpen(world, pos, state, owner);
+            sendResult(owner, ACT_TRY_PIN, true);   // o painel do dono mostra "ACESSO LIBERADO"
+            return;
+        }
         if (state.get(UNLOCKED) && !state.get(OPEN) && state.get(COL) == 1 && state.get(ROW) == 0) {
             apply(world, pos, state, true, true);
             play(world, pos, SoundEvents.BLOCK_IRON_DOOR_OPEN, 1.0f);

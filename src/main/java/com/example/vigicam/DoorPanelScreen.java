@@ -20,22 +20,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Painel de acesso da Porta Reforçada, baseado no "Terminal de Acesso" HTML: chassi octogonal em degraus (pixel art),
- * parafusos, LED, visor com scanlines e cadeado, teclado numérico 3x4 em "pedra" e os mesmos sons 8-bit
+ * Painel de acesso da Porta Reforçada, baseado no "Painel de Acesso Industrial" HTML: chassi octogonal em degraus (pixel art),
+ * parafusos, LED, visor com scanlines e cadeado, teclado numérico 3x4 em "pedra" e os sons 8-bit
  * (tecla, limpar, erro, destravar - ver {@link ModSounds}).
  * <p>
  * Todo o desenho é feito num espaço de design de {@link #W} px de largura (metade do HTML original) e escalado para caber na tela.
  * <ul>
- *   <li>Qualquer jogador: digita a senha ({@link ReinforcedDoorBlockEntity#PIN_LENGTH} dígitos). Quem decide se abre é o servidor.</li>
- *   <li>Dono: vê a barra extra com [ABRIR] (abre sem senha) e [SENHA] (troca a senha). Os outros jogadores nem recebem esses botões.</li>
+ *   <li>Qualquer jogador, dono inclusive: digita a senha ({@link ReinforcedDoorBlockEntity#PIN_LENGTH} dígitos). Só a senha
+ *       cadastrada abre; quem decide é o servidor.</li>
+ *   <li>Dono: vê o botão extra [SENHA] (troca a senha). Os outros jogadores nem recebem esse botão.</li>
+ *   <li>Dono que erra {@link ReinforcedDoorBlockEntity#MAX_OWNER_FAILS} vezes seguidas: o servidor avisa
+ *       ({@link ReinforcedDoorBlock#ACT_BIOMETRY}) e o visor mostra "FAZENDO BIOMETRIA" até a porta liberar. Não há GUI própria.</li>
  * </ul>
  */
 @Environment(EnvType.CLIENT)
 public class DoorPanelScreen extends Screen {
-    private static final int W = 160;
+    private static final int W = 166;
+    private static final int BASE_BOTTOM = 259;     // fim do teclado
+    private static final int OWNER_BOTTOM = 280;    // fim da barra extra do dono
     private static final int PIN = ReinforcedDoorBlockEntity.PIN_LENGTH;
 
-    private enum Mode { NORMAL, OWNER, CHANGE }
+    /** Perfis dos recortes em escada: pares {até a linha (distância da borda), recuo}. Medidas do clip-path do HTML, na metade. */
+    private static final int[] OUTER = {4, 12, 8, 8, 12, 4};
+    private static final int[] BEVEL = {4, 11, 7, 7, 11, 4};
+    private static final int[] BODY = {3, 10, 6, 6, 10, 3};
+
+    private enum Mode { NORMAL, CHANGE }
 
     private enum Style { STONE, RED, GREEN }
 
@@ -44,7 +54,8 @@ public class DoorPanelScreen extends Screen {
         //   LED/texto, LED claro, LED escuro, texto da senha, cadeado claro, cadeado sombra, buraco, fundo do visor (de fora pra dentro)
         RED(0xFF2A2A, 0xFF7A7A, 0xA80000, 0xFF4D4D, 0xFF7878, 0xB80000, 0x120404, new int[]{0x0D0303, 0x150505, 0x1D0707, 0x240808}),
         GREEN(0x00FF44, 0x8CFFAA, 0x009929, 0x00FF44, 0x9EFFB8, 0x009E2A, 0x041408, new int[]{0x030D06, 0x06180B, 0x082210, 0x092912}),
-        AMBER(0xFFB000, 0xFFE08A, 0xA06E00, 0xFFB84D, 0xFFD97A, 0xA87000, 0x140E03, new int[]{0x0D0903, 0x171004, 0x211705, 0x2A1D06});
+        AMBER(0xFFB000, 0xFFE08A, 0xA06E00, 0xFFB84D, 0xFFD97A, 0xA87000, 0x140E03, new int[]{0x0D0903, 0x171004, 0x211705, 0x2A1D06}),
+        CYAN(0x2AD4FF, 0x9BE9FF, 0x0077A0, 0x4DDCFF, 0x7AE4FF, 0x0090B8, 0x04121A, new int[]{0x030A0D, 0x061218, 0x081B24, 0x0A242F});
 
         final int main, ledLight, ledDark, text, lockLight, lockShade, key;
         final int[] bg;
@@ -55,7 +66,7 @@ public class DoorPanelScreen extends Screen {
         }
     }
 
-    /** Cadeado em pixel art 16x16 (A = cor, H = brilho, S = sombra, K = buraco da chave). */
+    /** Cadeado em pixel art 16x16 (A = cor, H = brilho, S = sombra, K = buraco da chave). Os mesmos 16x16 do SVG do HTML. */
     private static final String[] LOCK_CLOSED = {
             "................",
             "......HHHH......",
@@ -107,14 +118,14 @@ public class DoorPanelScreen extends Screen {
 
     private final BlockPos pos;
     private final boolean owner;
-    private final int panelH;   // altura do painel (o field "height" da Screen é a da janela) (o do dono tem a barra extra)
+    private final int panelH;   // altura do painel (o field "height" da Screen é a da janela); o do dono tem a barra extra
+    private final int bottom;   // fim do último botão
     private final List<Btn> buttons = new ArrayList<>();
-    private final List<int[]> texture = new ArrayList<>();   // {x, y, cor}: ladrilhos da textura "deepslate"
     private final StringBuilder input = new StringBuilder();
 
-    private Mode mode;
-    private boolean unlocked, waiting;
-    private long validateAt, errStart, errUntil, savedUntil, closeAt, waitDeadline, pressedUntil;
+    private Mode mode = Mode.NORMAL;
+    private boolean unlocked, waiting, biometry;
+    private long validateAt, errStart, errUntil, savedUntil, closeAt, waitDeadline, pressedUntil, bioStart, bioDeadline;
     private String pressedId = "";
 
     private float scale = 1f;
@@ -124,30 +135,18 @@ public class DoorPanelScreen extends Screen {
         super(Text.literal("Painel de acesso"));
         this.pos = pos;
         this.owner = owner;
-        this.mode = owner ? Mode.OWNER : Mode.NORMAL;
-        this.panelH = owner ? 271 : 249;
+        this.bottom = owner ? OWNER_BOTTOM : BASE_BOTTOM;
+        this.panelH = bottom + 29;
 
+        int[] cols = {14, 62, 110};
         String[] rows = {"123", "456", "789"};
         for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) buttons.add(new Btn(15 + c * 45, 120 + r * 27, 40, 22, rows[r].substring(c, c + 1), Style.STONE));
+            for (int c = 0; c < 3; c++) buttons.add(new Btn(cols[c], 148 + r * 29, 42, 24, rows[r].substring(c, c + 1), Style.STONE));
         }
-        buttons.add(new Btn(15, 201, 40, 22, "clear", Style.RED));
-        buttons.add(new Btn(60, 201, 40, 22, "0", Style.STONE));
-        buttons.add(new Btn(105, 201, 40, 22, "enter", Style.GREEN));
-        if (owner) {   // só o dono recebe estes botões
-            buttons.add(new Btn(15, 229, 62, 16, "open", Style.GREEN));
-            buttons.add(new Btn(83, 229, 62, 16, "change", Style.STONE));
-        }
-
-        for (int cy = 4; cy + 4 <= panelH - 4; cy += 4) {
-            for (int cx = 4; cx + 4 <= W - 4; cx += 4) {
-                if (!inOct(cx, cy, 4, 4, W - 8, panelH - 8, 4) || !inOct(cx + 3, cy, 4, 4, W - 8, panelH - 8, 4)
-                        || !inOct(cx, cy + 3, 4, 4, W - 8, panelH - 8, 4) || !inOct(cx + 3, cy + 3, 4, 4, W - 8, panelH - 8, 4)) continue;
-                int gx = cx / 4, gy = cy / 4, n = (gx * 31 + gy * 17) % 7;
-                int color = n == 0 ? 0xFF1D1D20 : n == 1 ? 0xFF2B2B30 : (gx + gy) % 2 == 0 ? 0xFF212125 : 0;
-                if (color != 0) texture.add(new int[]{cx, cy, color});
-            }
-        }
+        buttons.add(new Btn(cols[0], 235, 42, 24, "clear", Style.RED));
+        buttons.add(new Btn(cols[1], 235, 42, 24, "0", Style.STONE));
+        buttons.add(new Btn(cols[2], 235, 42, 24, "enter", Style.GREEN));
+        if (owner) buttons.add(new Btn(14, 264, 138, 16, "change", Style.STONE));   // só o dono recebe este botão
     }
 
     @Override
@@ -168,14 +167,26 @@ public class DoorPanelScreen extends Screen {
     public void onResult(int type, boolean ok) {
         waiting = false;
         long now = now();
-        if (type == ReinforcedDoorBlock.ACT_SET_PIN) {
+        if (type == ReinforcedDoorBlock.ACT_BIOMETRY) {
+            // o dono errou demais: o servidor está fazendo a biometria e mandará o "liberado" quando terminar
+            if (ok) {
+                biometry = true;
+                bioStart = now;
+                bioDeadline = now + 8000;
+                input.setLength(0);
+                validateAt = 0;
+                errUntil = 0;
+                sound(ModSounds.DOOR_KEY);
+            }
+        } else if (type == ReinforcedDoorBlock.ACT_SET_PIN) {
             if (ok) {
                 sound(ModSounds.DOOR_UNLOCK);
                 savedUntil = now + 1300;
                 input.setLength(0);
-                mode = Mode.OWNER;
+                mode = Mode.NORMAL;
             } else error();
         } else if (ok) {
+            biometry = false;
             unlocked = true;
             sound(ModSounds.DOOR_UNLOCK);
             closeAt = now + 1100;
@@ -192,6 +203,11 @@ public class DoorPanelScreen extends Screen {
 
     private static void sound(SoundEvent event) {
         MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(event, 1.0f, 1.0f));
+    }
+
+    /** Painel travado: já abriu ou a biometria está rodando. */
+    private boolean locked() {
+        return unlocked || biometry;
     }
 
     private boolean errActive(long now) {
@@ -216,21 +232,21 @@ public class DoorPanelScreen extends Screen {
     }
 
     private void digit(char d) {
-        if (unlocked || input.length() >= PIN) return;
+        if (locked() || waiting || input.length() >= PIN || errActive(now())) return;
         sound(ModSounds.DOOR_KEY);
         input.append(d);
         if (mode != Mode.CHANGE && input.length() == PIN) validateAt = now() + 180;   // confere sozinho no último dígito
     }
 
     private void clear() {
-        if (unlocked) return;
+        if (locked()) return;
         sound(ModSounds.DOOR_CLEAR);
         input.setLength(0);
         validateAt = 0;
     }
 
     private void enter() {
-        if (unlocked || waiting) return;
+        if (locked() || waiting) return;
         if (input.length() < PIN) {
             if (input.length() == 0) sound(ModSounds.DOOR_KEY); else error();
             return;
@@ -248,15 +264,12 @@ public class DoorPanelScreen extends Screen {
         switch (id) {
             case "clear" -> clear();
             case "enter" -> enter();
-            case "open" -> {
-                if (!unlocked && !waiting) { sound(ModSounds.DOOR_KEY); send(ReinforcedDoorBlock.ACT_OWNER_OPEN, ""); }
-            }
             case "change" -> {
-                if (unlocked) return;
+                if (locked() || !owner) return;
                 sound(ModSounds.DOOR_KEY);
                 input.setLength(0);
                 validateAt = 0;
-                mode = mode == Mode.CHANGE ? Mode.OWNER : Mode.CHANGE;
+                mode = mode == Mode.CHANGE ? Mode.NORMAL : Mode.CHANGE;
             }
             default -> digit(id.charAt(0));
         }
@@ -267,13 +280,14 @@ public class DoorPanelScreen extends Screen {
         long now = now();
         if (validateAt > 0 && now >= validateAt) {
             validateAt = 0;
-            if (mode != Mode.CHANGE && input.length() == PIN && !unlocked && !waiting) send(ReinforcedDoorBlock.ACT_TRY_PIN, input.toString());
+            if (mode != Mode.CHANGE && input.length() == PIN && !locked() && !waiting) send(ReinforcedDoorBlock.ACT_TRY_PIN, input.toString());
         }
         if (errUntil > 0 && now >= errUntil) {   // a senha errada some do visor
             errUntil = 0;
             input.setLength(0);
         }
         if (waiting && now > waitDeadline) waiting = false;
+        if (biometry && now > bioDeadline) biometry = false;   // o servidor cancelou (ex.: o dono se afastou)
         if (closeAt > 0 && now >= closeAt) close();
     }
 
@@ -305,7 +319,7 @@ public class DoorPanelScreen extends Screen {
         }
         switch (keyCode) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
-                if (!unlocked && input.length() > 0) {
+                if (!locked() && !waiting && input.length() > 0) {
                     sound(ModSounds.DOOR_KEY);
                     input.setLength(input.length() - 1);
                     validateAt = 0;
@@ -322,26 +336,34 @@ public class DoorPanelScreen extends Screen {
 
     private Theme theme(long now) {
         if (unlocked) return Theme.GREEN;
+        if (biometry) return Theme.CYAN;
         if (errActive(now)) return Theme.RED;
         if (now < savedUntil) return Theme.GREEN;
         if (mode == Mode.CHANGE) return Theme.AMBER;
-        return owner ? Theme.GREEN : Theme.RED;
+        return Theme.RED;
     }
 
     private String status(long now) {
-        if (unlocked) return "ABERTO";
-        if (errActive(now)) return "NEGADO";
-        if (now < savedUntil) return "SALVO";
+        if (unlocked) return "ACESSO LIBERADO";
+        if (biometry) return "FAZENDO BIOMETRIA";
+        if (errActive(now)) return "ACESSO NEGADO";
+        if (now < savedUntil) return "SENHA SALVA";
         if (mode == Mode.CHANGE) return "NOVA SENHA";
-        return owner ? "DONO" : "TRANCADO";
+        return "TRANCADO";
+    }
+
+    /** Cadeado aberto: liberado, senha salva ou modo de troca de senha. Na biometria e no erro continua fechado. */
+    private boolean lockOpen(long now) {
+        if (unlocked) return true;
+        if (biometry || errActive(now)) return false;
+        return now < savedUntil || mode == Mode.CHANGE;
     }
 
     private String label(Btn b) {
         return switch (b.id) {
             case "clear" -> "X";
             case "enter" -> "OK";
-            case "open" -> "ABRIR";
-            case "change" -> mode == Mode.CHANGE ? "VOLTAR" : "SENHA";
+            case "change" -> mode == Mode.CHANGE ? "VOLTAR" : "TROCAR SENHA";
             default -> b.id;
         };
     }
@@ -374,49 +396,55 @@ public class DoorPanelScreen extends Screen {
     private void drawPanel(DrawContext c, long now, double mx, double my) {
         Theme th = theme(now);
 
-        // chassi: sombra, contorno, bisel e corpo (todos octogonais em degraus)
-        oct(c, 0, 7, W, panelH, 4, 0x47000000);
-        oct(c, 0, 0, W, panelH, 4, 0xFF141417);
-        oct(c, 2, 2, W - 4, panelH - 4, 4, 0xFF3A3A40);
-        oct(c, 4, 4, W - 8, panelH - 8, 4, 0xFF252529);
-        for (int[] t : texture) c.fill(t[0], t[1], t[0] + 4, t[1] + 4, t[2]);
-        c.fill(16, 4, W - 16, 6, 0xFF333338);
-        c.fill(4, 16, 6, panelH - 16, 0xFF333338);
-        c.fill(16, panelH - 6, W - 16, panelH - 4, 0xFF161619);
-        c.fill(W - 6, 16, W - 4, panelH - 16, 0xFF161619);
+        // chassi: sombra, contorno, bisel e corpo "limpo" (todos octogonais em degraus, como no clip-path do HTML)
+        oct(c, 0, 7, W, panelH, OUTER, 0x47000000);
+        oct(c, 0, 0, W, panelH, OUTER, 0xFF141417);
+        oct(c, 2, 2, W - 4, panelH - 4, BEVEL, 0xFF3A3A40);
+        int bx = 4, by = 4, bw = W - 8, bh = panelH - 8;
+        oct(c, bx, by, bw, bh, BODY, 0xFF28282C);
+        // borda 3D do corpo (inset shadow): claro em cima/esquerda, escuro embaixo/direita
+        clipFill(c, bx, by, bw, bh, BODY, bx, by, bx + bw, by + 2, 0xFF45454C);
+        clipFill(c, bx, by, bw, bh, BODY, bx, by, bx + 2, by + bh, 0xFF45454C);
+        clipFill(c, bx, by, bw, bh, BODY, bx, by + bh - 2, bx + bw, by + bh, 0xFF161618);
+        clipFill(c, bx, by, bw, bh, BODY, bx + bw - 2, by, bx + bw, by + bh, 0xFF161618);
 
         // topo: parafusos e LED
-        screw(c, 14, 13);
-        screw(c, W - 20, 13);
-        c.fill(64, 12, 100, 24, 0xFF3C3C42);
-        c.fill(62, 10, 98, 22, 0xFF0E0E10);
-        c.fill(64, 12, 96, 20, 0xFF121215);
-        c.fill(64, 12, 96, 13, 0xFF08080A);
-        c.fill(64, 12, 65, 20, 0xFF08080A);
-        c.fill(62, 9, 98, 23, argb(0x10, th.main));
-        c.fill(66 - 4, 13 - 4, 94 + 4, 19 + 4, argb(0x14, th.main));
-        c.fill(66 - 2, 13 - 2, 94 + 2, 19 + 2, argb(0x26, th.main));
-        c.fill(66, 13, 94, 19, argb(0xFF, th.main));
-        c.fill(66, 13, 94, 14, argb(0xFF, th.ledLight));
-        c.fill(66, 18, 94, 19, argb(0xFF, th.ledDark));
+        screw(c, 18, 17);
+        screw(c, W - 23, 17);
+        drawLed(c, th);
 
         drawVisor(c, now, th);
 
         for (Btn b : buttons) {
             boolean pressed = b.id.equals(pressedId) && now < pressedUntil;
-            drawButton(c, b, b.contains(mx, my), pressed);
+            drawButton(c, b, !locked() && b.contains(mx, my), pressed);
         }
 
-        int by = (owner ? 245 : 223) + 8;
-        screw(c, 18, by);
-        screw(c, W - 24, by);
-        c.fill(64, by + 1, 96, by + 5, 0xFF141417);
-        c.fill(64, by + 5, 96, by + 6, 0xFF3C3C42);
+        int sy = bottom + 8;
+        screw(c, 20, sy);
+        screw(c, W - 25, sy);
+    }
+
+    private void drawLed(DrawContext c, Theme th) {
+        int sx = 66, sy = 14, sw = 34, sh = 12;
+        c.fill(sx + 1, sy + 1, sx + sw + 1, sy + sh + 1, 0xFF3C3C42);       // sombra dura embaixo/direita
+        c.fill(sx, sy, sx + sw, sy + sh, 0xFF0E0E10);                       // borda
+        c.fill(sx + 2, sy + 2, sx + sw - 2, sy + sh - 2, 0xFF121215);
+        c.fill(sx + 2, sy + 2, sx + sw - 2, sy + 3, 0xFF08080A);            // sombra interna em cima/esquerda
+        c.fill(sx + 2, sy + 2, sx + 3, sy + sh - 2, 0xFF08080A);
+
+        int x0 = 69, y0 = 17, x1 = 97, y1 = 23;                             // barra do LED
+        c.fill(x0 - 6, y0 - 6, x1 + 6, y1 + 6, argb(0x10, th.main));        // brilho em camadas
+        c.fill(x0 - 4, y0 - 4, x1 + 4, y1 + 4, argb(0x14, th.main));
+        c.fill(x0 - 2, y0 - 2, x1 + 2, y1 + 2, argb(0x26, th.main));
+        c.fill(x0, y0, x1, y1, argb(0xFF, th.main));
+        c.fill(x0, y0, x1, y0 + 1, argb(0xFF, th.ledLight));
+        c.fill(x0, y1 - 1, x1, y1, argb(0xFF, th.ledDark));
     }
 
     private void drawVisor(DrawContext c, long now, Theme th) {
-        // moldura recuada
-        int fx = 12, fy = 28, fw = 136, fh = 84;
+        // moldura recuada (slot de inventário)
+        int fx = 14, fy = 34, fw = 138, fh = 104;
         c.fill(fx, fy, fx + fw, fy + fh, 0xFF0E0E10);
         c.fill(fx + 2, fy + 2, fx + fw - 2, fy + fh - 2, 0xFF18181B);
         c.fill(fx + 2, fy + 2, fx + fw - 2, fy + 4, 0xFF0B0B0D);
@@ -425,33 +453,47 @@ public class DoorPanelScreen extends Screen {
         c.fill(fx + fw - 4, fy + 2, fx + fw - 2, fy + fh - 2, 0xFF38383E);
 
         // tela
-        int x0 = 16, y0 = 32, x1 = 144, y1 = 108;
+        int x0 = 18, y0 = 38, x1 = 148, y1 = 134;
         c.fill(x0, y0, x1, y1, 0xFF09090B);
         x0++; y0++; x1--; y1--;
         boolean flash = errActive(now) && ((now - errStart) / 90) % 2 == 1;   // piscada vermelha ao errar
         if (flash) {
             c.fill(x0, y0, x1, y1, 0xFF4A0808);
         } else {
-            int[] insetX = {0, 8, 20, 34, 48}, insetY = {0, 5, 12, 20, 28};   // brilho central (gradiente radial em degraus)
-            for (int i = 0; i < 4; i++) c.fill(x0 + insetX[i], y0 + insetY[i], x1 - insetX[i], y1 - insetY[i], argb(0xFF, th.bg[i]));
+            // brilho central (gradiente radial em degraus, um pouco acima do meio como no HTML)
+            int[] insetX = {0, 8, 20, 34}, insetTop = {0, 5, 13, 21}, insetBot = {0, 7, 17, 29};
+            for (int i = 0; i < 4; i++) {
+                c.fill(x0 + insetX[i], y0 + insetTop[i], x1 - insetX[i], y1 - insetBot[i], argb(0xFF, th.bg[i]));
+            }
         }
 
-        boolean lockOpen = th != Theme.RED;
-        drawLock(c, lockOpen, th, 56, lockOpen ? 48 : 45);   // o arco do cadeado aberto começa uma linha acima do fechado
-
-        c.drawCenteredTextWithShadow(this.textRenderer, status(now), 80, 37, argb(0xFF, th.main));
-        c.drawCenteredTextWithShadow(this.textRenderer, pinText(), 80, 95, argb(0xFF, th.text));
-
-        // scanlines
+        // scanlines (por baixo do cadeado e dos textos, como no HTML)
         for (int y = y0; y < y1; y += 2) c.fill(x0, y + 1, x1, y + 2, 0x52000000);
+
+        drawLock(c, lockOpen(now), th, (W - 48) / 2, 62);
+
+        if (biometry) drawScan(c, now, th, x0, y0, x1, y1);
+
+        c.drawCenteredTextWithShadow(this.textRenderer, status(now), W / 2, 45, argb(0xFF, th.main));
+        c.drawCenteredTextWithShadow(this.textRenderer, pinText(now), W / 2, 118, argb(0xFF, th.text));
     }
 
-    private String pinText() {
+    /** Faixa de "leitura" que desce pelo visor durante a biometria (só o desenho; não existe tela de biometria). */
+    private void drawScan(DrawContext c, long now, Theme th, int x0, int y0, int x1, int y1) {
+        float p = ((now - bioStart) % 1100) / 1100f;
+        int y = y0 + 4 + (int) (p * (y1 - y0 - 10));
+        c.fill(x0 + 8, y - 4, x1 - 8, y - 2, argb(0x18, th.main));
+        c.fill(x0 + 8, y - 2, x1 - 8, y, argb(0x30, th.main));
+        c.fill(x0 + 8, y, x1 - 8, y + 2, argb(0xC8, th.main));
+    }
+
+    private String pinText(long now) {
+        int filled = biometry ? (int) (((now - bioStart) / 450) % (PIN + 1)) : input.length();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < PIN; i++) {
             if (i > 0) sb.append(' ');
             if (unlocked) sb.append('*');
-            else if (i < input.length()) sb.append(mode == Mode.CHANGE ? input.charAt(i) : '*');   // ao trocar a senha o dono vê o que digita
+            else if (i < filled) sb.append(mode == Mode.CHANGE && !biometry ? input.charAt(i) : '*');   // ao trocar a senha o dono vê o que digita
             else sb.append('_');
         }
         return sb.toString();
@@ -532,36 +574,53 @@ public class DoorPanelScreen extends Screen {
         c.drawCenteredTextWithShadow(this.textRenderer, label(b), x + w / 2, y + (h - 8) / 2 + 1, argb(0xFF, txt));
     }
 
+    /** Parafuso quadrado 5x5 (borda #38383E, miolo #1A1A1D), como o .mc-screw do HTML. */
     private static void screw(DrawContext c, int x, int y) {
-        c.fill(x, y, x + 6, y + 6, 0xFF121214);
-        c.fill(x + 1, y + 1, x + 5, y + 5, 0xFF3D3D43);
-        c.fill(x + 1, y + 1, x + 5, y + 2, 0xFF575760);
-        c.fill(x + 1, y + 1, x + 2, y + 5, 0xFF575760);
-        c.fill(x + 1, y + 4, x + 5, y + 5, 0xFF222226);
-        c.fill(x + 4, y + 1, x + 5, y + 5, 0xFF222226);
-        c.fill(x + 1, y + 2, x + 5, y + 3, 0xFF141417);   // fenda
+        c.fill(x, y, x + 5, y + 5, 0xFF38383E);
+        c.fill(x + 1, y + 1, x + 4, y + 4, 0xFF1A1A1D);
     }
 
     private static int argb(int alpha, int rgb) {
         return (alpha << 24) | (rgb & 0xFFFFFF);
     }
 
-    /** Retângulo com os 4 cantos cortados em 3 degraus de {@code step} px (o recorte em escada do chassi). */
-    private static void oct(DrawContext c, int x, int y, int w, int h, int step, int color) {
-        int s3 = step * 3;
-        for (int i = 0; i < 3; i++) {
-            int inset = s3 - i * step;
-            c.fill(x + inset, y + i * step, x + w - inset, y + (i + 1) * step, color);
-            c.fill(x + inset, y + h - (i + 1) * step, x + w - inset, y + h - i * step, color);
-        }
-        c.fill(x, y + s3, x + w, y + h - s3, color);
+    // ------------------------------------------------------------------ formas em escada
+
+    /** Recuo (em px) da escada na linha que está a {@code d} px da borda de cima ou de baixo. */
+    private static int insetAt(int[] profile, int d) {
+        for (int i = 0; i < profile.length; i += 2) if (d < profile[i]) return profile[i + 1];
+        return 0;
     }
 
-    private static boolean inOct(int px, int py, int x, int y, int w, int h, int step) {
-        if (px < x || px >= x + w || py < y || py >= y + h) return false;
-        int s3 = step * 3;
-        int dx = Math.min(px - x, x + w - 1 - px), dy = Math.min(py - y, y + h - 1 - py);
-        if (dx >= s3 || dy >= s3) return true;
-        return dx >= s3 - (dy / step) * step;
+    /** Retângulo com os 4 cantos cortados em escada (o clip-path octogonal do chassi). */
+    private static void oct(DrawContext c, int x, int y, int w, int h, int[] profile, int color) {
+        clipFill(c, x, y, w, h, profile, x, y, x + w, y + h, color);
+    }
+
+    /** Preenche o retângulo {@code [rx0,rx1) x [ry0,ry1)} apenas onde ele cai dentro da forma em escada (x, y, w, h, profile). */
+    private static void clipFill(DrawContext c, int x, int y, int w, int h, int[] profile,
+                                 int rx0, int ry0, int rx1, int ry1, int color) {
+        boolean open = false;
+        int runY = 0, runX0 = 0, runX1 = 0;
+        for (int row = ry0; row <= ry1; row++) {
+            int x0 = 0, x1 = 0;
+            boolean has = false;
+            if (row < ry1) {
+                int inset = insetAt(profile, Math.min(row - y, y + h - 1 - row));
+                x0 = Math.max(rx0, x + inset);
+                x1 = Math.min(rx1, x + w - inset);
+                has = x0 < x1;
+            }
+            if (open && (!has || x0 != runX0 || x1 != runX1)) {   // fecha o trecho de linhas iguais
+                c.fill(runX0, runY, runX1, row, color);
+                open = false;
+            }
+            if (has && !open) {
+                open = true;
+                runY = row;
+                runX0 = x0;
+                runX1 = x1;
+            }
+        }
     }
 }

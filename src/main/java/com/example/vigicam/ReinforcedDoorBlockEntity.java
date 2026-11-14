@@ -13,13 +13,16 @@ import java.util.UUID;
 /**
  * Só existe no bloco central de baixo.
  * <ul>
- *   <li>Servidor: guarda o dono (quem colocou a porta) e a senha de {@link #PIN_LENGTH} dígitos. Só o dono pode trocar a senha
- *       e ele abre a porta sem digitá-la. A senha nunca é enviada aos clientes.</li>
+ *   <li>Servidor: guarda o dono (quem colocou a porta) e a senha de {@link #PIN_LENGTH} dígitos. Só o dono pode trocar a senha,
+ *       mas a porta só abre com a senha certa, até para o dono. Se o dono errar {@link #MAX_OWNER_FAILS} vezes seguidas
+ *       (esqueceu a senha) o sistema faz a "biometria" e libera. A senha nunca é enviada aos clientes.</li>
  *   <li>Cliente: guarda o quanto a porta já abriu (0 = fechada, 1 = aberta) para animar.</li>
  * </ul>
  */
 public class ReinforcedDoorBlockEntity extends BlockEntity {
     public static final int PIN_LENGTH = 4;
+    /** Erros seguidos do dono até o sistema fazer a biometria. */
+    public static final int MAX_OWNER_FAILS = 3;
 
     /** Quanto o progresso anda por tick: abre/fecha em 10 ticks (0,5 s). */
     private static final float STEP = 0.1f;
@@ -30,6 +33,10 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
     private UUID owner;
     private String pin = "";
 
+    /** Só no servidor e só em memória: erros seguidos do dono e se a biometria está em andamento. */
+    private int ownerFails;
+    private boolean biometryPending;
+
     public ReinforcedDoorBlockEntity(BlockPos pos, BlockState state) {
         super(VigiCam.REINFORCED_DOOR_BE, pos, state);
     }
@@ -38,6 +45,11 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
 
     public boolean hasOwner() {
         return owner != null;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    public UUID getOwnerUuid() {
+        return owner;
     }
 
     public boolean isOwner(PlayerEntity player) {
@@ -62,7 +74,27 @@ public class ReinforcedDoorBlockEntity extends BlockEntity {
 
     public void setPin(String newPin) {
         pin = newPin;
+        ownerFails = 0;
         markDirty();
+    }
+
+    /** O dono errou a senha. Devolve true quando chegou ao limite (e zera o contador): hora da biometria. */
+    public boolean registerOwnerFail() {
+        if (++ownerFails < MAX_OWNER_FAILS) return false;
+        ownerFails = 0;
+        return true;
+    }
+
+    public void resetOwnerFails() {
+        ownerFails = 0;
+    }
+
+    public boolean isBiometryPending() {
+        return biometryPending;
+    }
+
+    public void setBiometryPending(boolean pending) {
+        biometryPending = pending;
     }
 
     /** Porta sem senha (recém-colocada ou de um mundo antigo): sorteia uma, assim ninguém abre sem saber. */
