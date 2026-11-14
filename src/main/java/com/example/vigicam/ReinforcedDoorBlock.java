@@ -20,12 +20,19 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.state.StateManager;
 import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.IntProperty;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.random.Random;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
@@ -41,8 +48,10 @@ import org.jetbrains.annotations.Nullable;
  * <ul>
  *   <li>Só quebra com picareta de diamante (ou melhor): tags mineable/pickaxe + needs_diamond_tool e requiresTool().</li>
  *   <li>Travada ou só destravada (fechada) = parede sólida. Só depois de aberta (pivô "door" girado) o vão fica livre.</li>
- *   <li>Clique direito 1: destrava (animação "on"). Clique direito 2: abre, girando o pivô "door". Depois alterna abrir/fechar.</li>
- *   <li>Agachado + clique direito com a porta fechada e destravada: trava de novo (animação "off").</li>
+ *   <li>Porta fechada (sempre travada): clique direito abre o painel de senha (DoorPanelScreen). Senha certa destrava (luzes verdes,
+ *       animação "on") e, meio segundo depois, abre girando o pivô "door".</li>
+ *   <li>Dono (quem colocou): abre sem senha e é o único que vê o botão de trocar a senha no painel.</li>
+ *   <li>Porta aberta: clique direito fecha e trava de novo (animação "off", luzes vermelhas).</li>
  * </ul>
  * O eixo da largura do modelo (+x do .geo.json) aponta para {@code FACING.rotateYClockwise()}.
  */
@@ -140,6 +149,11 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.onPlaced(world, pos, state, placer, stack);
         if (world.isClient) return;
+        // quem coloca é o dono; a senha inicial é sorteada (o dono não precisa dela e pode trocá-la no painel)
+        if (world.getBlockEntity(pos) instanceof ReinforcedDoorBlockEntity be) {
+            if (placer instanceof PlayerEntity p) be.setOwner(p);
+            be.ensurePin(world.random);
+        }
         Direction facing = state.get(FACING);
         for (int c = 0; c < WIDTH; c++) {
             for (int r = 0; r < HEIGHT; r++) {
@@ -173,33 +187,97 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
         return 1.0f;
     }
 
-    // ------------------------------------------------------------------ uso: destravar -> abrir/fechar
+    // ------------------------------------------------------------------ uso: painel de senha
+
+    /** Tipos de ação do cliente (pacote DOOR_ACTION). */
+    public static final int ACT_TRY_PIN = 0, ACT_OWNER_OPEN = 1, ACT_SET_PIN = 2;
+    /** Ticks entre as luzes ficarem verdes e a porta começar a abrir. */
+    private static final int OPEN_DELAY = 10;
+    private static final double MAX_USE_DIST_SQ = 12 * 12;
 
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player,
                               Hand hand, BlockHitResult hit) {
         if (world.isClient) return ActionResult.SUCCESS;
+        if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
 
         BlockPos master = masterPos(pos, state);
-        boolean unlocked = state.get(UNLOCKED), open = state.get(OPEN);
+        if (!(world.getBlockEntity(master) instanceof ReinforcedDoorBlockEntity be)) return ActionResult.PASS;
 
-        if (!unlocked) {
-            // 1º clique: destrava (animação "on")
-            apply(world, master, state, true, false);
-            play(world, master, SoundEvents.BLOCK_LEVER_CLICK, 0.7f);
-            player.sendMessage(Text.literal("§aPorta destravada"), true);
-        } else if (!open && player.isSneaking()) {
-            // agachado com a porta fechada: trava de novo (animação "off")
+        if (state.get(OPEN)) {
+            // aberta: fecha e trava de novo (animação "off")
             apply(world, master, state, false, false);
+            play(world, master, SoundEvents.BLOCK_IRON_DOOR_CLOSE, 1.0f);
             play(world, master, SoundEvents.BLOCK_LEVER_CLICK, 0.5f);
-            player.sendMessage(Text.literal("§cPorta travada"), true);
-        } else {
-            // 2º clique em diante: abre/fecha girando o pivô "door"
-            apply(world, master, state, true, !open);
-            play(world, master, open ? SoundEvents.BLOCK_IRON_DOOR_CLOSE : SoundEvents.BLOCK_IRON_DOOR_OPEN, 1.0f);
-            world.emitGameEvent(player, open ? GameEvent.BLOCK_CLOSE : GameEvent.BLOCK_OPEN, master);
+            world.emitGameEvent(player, GameEvent.BLOCK_CLOSE, master);
+            return ActionResult.CONSUME;
         }
+
+        // porta de um mundo antigo / comando: quem usar primeiro vira o dono
+        if (!be.hasOwner()) {
+            be.setOwner(player);
+            player.sendMessage(Text.literal("§aVocê agora é o dono desta porta"), true);
+        }
+        be.ensurePin(world.random);
+
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeBlockPos(master);
+        buf.writeBoolean(be.isOwner(player));
+        ServerPlayNetworking.send(sp, VigiCam.DOOR_PANEL, buf);
         return ActionResult.CONSUME;
+    }
+
+    /** Pedido do painel (cliente -> servidor). Tudo é conferido aqui: o cliente nunca decide se pode abrir. */
+    public static void handleAction(ServerPlayerEntity player, int type, BlockPos pos, String pin) {
+        World world = player.getWorld();
+        if (player.squaredDistanceTo(Vec3d.ofCenter(pos).add(0, 1, 0)) > MAX_USE_DIST_SQ) return;
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof ReinforcedDoorBlock door)) return;
+        if (state.get(COL) != 1 || state.get(ROW) != 0 || state.get(OPEN)) return;
+        if (!(world.getBlockEntity(pos) instanceof ReinforcedDoorBlockEntity be)) return;
+
+        boolean ok = false;
+        switch (type) {
+            case ACT_TRY_PIN -> {
+                ok = be.isOwner(player) || be.checkPin(pin);
+                if (ok) door.unlockAndOpen(world, pos, state, player);
+                else playExcept(world, pos, player, ModSounds.DOOR_ERROR, 0.5f);
+            }
+            case ACT_OWNER_OPEN -> {
+                ok = be.isOwner(player);
+                if (ok) door.unlockAndOpen(world, pos, state, player);
+            }
+            case ACT_SET_PIN -> {
+                ok = be.isOwner(player) && ReinforcedDoorBlockEntity.isValidPin(pin);
+                if (ok) be.setPin(pin);
+            }
+            default -> { return; }
+        }
+
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeByte(type);
+        out.writeBoolean(ok);
+        ServerPlayNetworking.send(player, VigiCam.DOOR_RESULT, out);
+    }
+
+    /** Destrava (luzes verdes) agora e abre a porta {@link #OPEN_DELAY} ticks depois. */
+    private void unlockAndOpen(World world, BlockPos master, BlockState state, PlayerEntity player) {
+        apply(world, master, state, true, false);
+        playExcept(world, master, player, ModSounds.DOOR_UNLOCK, 0.8f);   // quem digitou já ouviu o som no painel
+        world.scheduleBlockTick(master, this, OPEN_DELAY);
+    }
+
+    @Override
+    public void scheduledTick(BlockState state, ServerWorld world, BlockPos pos, Random random) {
+        if (state.get(UNLOCKED) && !state.get(OPEN) && state.get(COL) == 1 && state.get(ROW) == 0) {
+            apply(world, pos, state, true, true);
+            play(world, pos, SoundEvents.BLOCK_IRON_DOOR_OPEN, 1.0f);
+            world.emitGameEvent(null, GameEvent.BLOCK_OPEN, pos);
+        }
+    }
+
+    private static void playExcept(World world, BlockPos master, PlayerEntity except, SoundEvent sound, float volume) {
+        world.playSound(except, master.up(), sound, SoundCategory.BLOCKS, volume, 1.0f);
     }
 
     private static void play(World world, BlockPos master, SoundEvent sound, float pitchBase) {

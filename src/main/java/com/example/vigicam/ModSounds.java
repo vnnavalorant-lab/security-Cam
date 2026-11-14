@@ -16,6 +16,12 @@ public final class ModSounds {
     /** Clique no controle remoto: toca uma vez por clique do mouse. */
     public static final SoundEvent PRESS_CONTROL = register("press_control");
 
+    /** Painel da porta reforçada (mesmos sons 8-bit do painel de referência): tecla, limpar, erro e destravar. */
+    public static final SoundEvent DOOR_KEY = register("door_key");
+    public static final SoundEvent DOOR_CLEAR = register("door_clear");
+    public static final SoundEvent DOOR_ERROR = register("door_error");
+    public static final SoundEvent DOOR_UNLOCK = register("door_unlock");
+
     private ModSounds() {}
 
     private static SoundEvent register(String name) {

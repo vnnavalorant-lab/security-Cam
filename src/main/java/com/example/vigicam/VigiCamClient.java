@@ -109,6 +109,20 @@ public class VigiCamClient implements ClientModInitializer {
             });
         });
 
+        // porta reforçada: o servidor manda abrir o painel de senha e depois o resultado de cada pedido
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.DOOR_PANEL, (client, handler, buf, sender) -> {
+            BlockPos pos = buf.readBlockPos();
+            boolean owner = buf.readBoolean();
+            client.execute(() -> client.setScreen(new DoorPanelScreen(pos, owner)));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.DOOR_RESULT, (client, handler, buf, sender) -> {
+            int type = buf.readByte();
+            boolean ok = buf.readBoolean();
+            client.execute(() -> {
+                if (client.currentScreen instanceof DoorPanelScreen screen) screen.onResult(type, ok);
+            });
+        });
+
         ClientTickEvents.END_CLIENT_TICK.register(VigiCamClient::tick);
         HudRenderCallback.EVENT.register(VigiCamClient::renderHud);
 

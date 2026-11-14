@@ -56,7 +56,17 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 
 - **Estrutura 3x3x1:** 3 blocos de largura, 3 de altura e só 1 de profundidade (Z). Precisa de espaço livre para os 9 blocos; o clique define o bloco central de baixo.
 - **Só quebra com picareta de diamante** (ou netherite): `mineable/pickaxe` + `needs_diamond_tool` + `requiresTool()`. Dureza 50 / resistência 1200 (como obsidiana). Quebrar qualquer parte remove a porta inteira e solta um item só.
-- **Uso:** clique direito 1x = **destrava** (animação `on`: luzes verdes). Clique direito de novo = **abre**, girando o pivô `door`; depois alterna abrir/fechar. Agachado + clique direito com a porta fechada = **trava de novo** (animação `off`: luzes vermelhas).
+- **Painel de senha:** clique direito na porta fechada abre o painel de acesso (`DoorPanelScreen`, inspirado no "Terminal de Acesso"
+  em HTML: chassi octogonal em degraus, parafusos, LED, visor com scanlines, cadeado pixel-art, teclado de pedra, tremor + piscada
+  vermelha ao errar, mesmos sons 8-bit). Senha de 4 dígitos (teclado do mouse ou numérico/Enter/Backspace/X). Senha certa: luzes verdes
+  (animação `on`) e 0,5 s depois a porta abre. Clique direito na porta **aberta** fecha e **trava** de novo (animação `off`).
+- **Dono:** quem coloca a porta é o dono (guardado no BlockEntity, salvo no mundo). Ele abre **sem digitar senha** e é o único que vê
+  a barra extra do painel: **[ABRIR]** e **[SENHA]** (digita 4 dígitos e confirma com OK para trocar; **[VOLTAR]** cancela).
+  Os outros jogadores só recebem o teclado e precisam descobrir a senha. A senha inicial é sorteada; porta de mundo antigo/comando
+  sem dono passa a ser de quem usar primeiro.
+- **Segurança:** a senha fica só no servidor e nunca é enviada aos clientes; o servidor confere tudo (distância, dono, formato da senha).
+- **Sons do painel:** `door_key`, `door_clear`, `door_error`, `door_unlock` (.ogg) são a síntese Web Audio do HTML reproduzida fielmente;
+  para regenerar rode `python3 tools/gen_door_sounds.py` (precisa de ffmpeg com libvorbis).
 - **Colisão:** fechada (travada ou só destravada) = parede 3x3x1 inteira; só depois de aberta (pivô `door` girado) fica só o quadro (batentes e verga), e dá para atravessar o vão de 2 x 2,5 blocos.
 - **Quadro (`blocks`):** os cubos `block` do grupo `blocks` usam a textura do bloco vizinho (esquerda, direita, em cima ou embaixo, o primeiro encontrado, em ladrilhos de 16 px); sem bloco vizinho ficam invisíveis. No item da mão o quadro usa a textura do próprio modelo.
 - **Modelo:** `reinforced_door.bbmodel` -> `geo/reinforced_door.geo.json`, textura `textures/entity/reinforced_door.png`, animações `animations/reinforced_door.animation.json` (`on` esconde as luzes `locked`/`locked2`; `off` esconde `unlocked`/`unlocked2`/`green`/`green2`). Desenho em `ReinforcedDoorRenderer`.

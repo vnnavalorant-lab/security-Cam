@@ -41,6 +41,10 @@ public class VigiCam implements ModInitializer {
     public static final Identifier DRONE_RELEASE = new Identifier(MOD_ID, "drone_release");
     public static final Identifier CYCLE_DEVICE = new Identifier(MOD_ID, "cycle_device");
     public static final Identifier VIEW_STATE = new Identifier(MOD_ID, "view_state");   // cliente -> servidor: "estou nas câmeras/drone"
+    // porta reforçada: servidor -> cliente (abre o painel / resultado) e cliente -> servidor (digitou senha, dono abriu, nova senha)
+    public static final Identifier DOOR_PANEL = new Identifier(MOD_ID, "door_panel");
+    public static final Identifier DOOR_RESULT = new Identifier(MOD_ID, "door_result");
+    public static final Identifier DOOR_ACTION = new Identifier(MOD_ID, "door_action");
     // servidor -> clientes próximos: quem está pilotando (para as mãos nos controles)
     public static final Identifier PILOT_SYNC = new Identifier(MOD_ID, "pilot_sync");
     // servidor -> cliente: o drone perdeu o sinal (sai da visão do drone)
@@ -133,6 +137,13 @@ public class VigiCam implements ModInitializer {
                 }));
         ServerPlayNetworking.registerGlobalReceiver(CYCLE_DEVICE, (server, player, handler, buf, sender) ->
                 server.execute(() -> RemoteItem.cycle(player)));
+
+        ServerPlayNetworking.registerGlobalReceiver(DOOR_ACTION, (server, player, handler, buf, sender) -> {
+            int type = buf.readByte();
+            BlockPos pos = buf.readBlockPos();
+            String pin = buf.readString(16);
+            server.execute(() -> ReinforcedDoorBlock.handleAction(player, type, pos, pin));
+        });
 
         ServerPlayNetworking.registerGlobalReceiver(VIEW_STATE, (server, player, handler, buf, sender) -> {
             boolean on = buf.readBoolean();
