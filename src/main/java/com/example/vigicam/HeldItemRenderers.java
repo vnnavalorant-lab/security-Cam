@@ -101,7 +101,7 @@ public final class HeldItemRenderers {
         m.push();
         m.translate(0.5, 0.51, 0.5);
         m.scale(1f / 16f, 1f / 16f, 1f / 16f);
-        ReinforcedDoorRenderer.draw(m, vcp, light, overlay, false, 0f);
+        ReinforcedDoorRenderer.draw(m, vcp, light, overlay, false, 0f, null, true);   // quadro com a textura própria
         m.pop();
     }
 

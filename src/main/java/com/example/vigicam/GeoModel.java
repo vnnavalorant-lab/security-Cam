@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.client.render.VertexConsumer;
+import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
@@ -162,7 +163,50 @@ public final class GeoModel {
 
     /** Desenha o modelo deixando o {@code handler} animar os ossos (porta: pivô "door", luzes por escala). */
     public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, BoneHandler handler) {
-        for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, 0f, 255, 255, 255, 255, false, handler);
+        render(matrices, vc, light, overlay, handler, null);
+    }
+
+    /**
+     * Igual ao anterior, mas se {@code sprite} não for nulo os cubos desenhados usam essa textura (a de um bloco do mundo,
+     * do atlas de blocos) em vez das UVs do modelo: cada face é repartida em ladrilhos de 16 px, como um bloco normal.
+     */
+    public void render(MatrixStack matrices, VertexConsumer vc, int light, int overlay, BoneHandler handler, Sprite sprite) {
+        this.sprite = sprite;
+        try {
+            for (Group g : groups) renderGroup(g, matrices, vc, light, overlay, 0f, 255, 255, 255, 255, false, handler);
+        } finally {
+            this.sprite = null;
+        }
+    }
+
+    private Sprite sprite;   // só durante um render(..., sprite)
+
+    private static void tiled(VertexConsumer vc, Matrix4f pos, Matrix3f nrm, Quad q, Sprite sp, int light, int overlay,
+                              int cr, int cg, int cb, int ca) {
+        // eixo u: v0 -> v3; eixo v: v0 -> v1 (mesma convenção das UVs lidas do modelo)
+        float ux = q.p[9] - q.p[0], uy = q.p[10] - q.p[1], uz = q.p[11] - q.p[2];
+        float vx = q.p[3] - q.p[0], vy = q.p[4] - q.p[1], vz = q.p[5] - q.p[2];
+        float lu = (float) Math.sqrt(ux * ux + uy * uy + uz * uz), lv = (float) Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (lu < 1e-4f || lv < 1e-4f) return;
+        int nu = Math.max(1, (int) Math.ceil(lu / 16f - 1e-4)), nv = Math.max(1, (int) Math.ceil(lv / 16f - 1e-4));
+        for (int i = 0; i < nu; i++) {
+            float s0 = i * 16f / lu, s1 = Math.min(1f, (i + 1) * 16f / lu);
+            for (int j = 0; j < nv; j++) {
+                float t0 = j * 16f / lv, t1 = Math.min(1f, (j + 1) * 16f / lv);
+                float uA = sp.getFrameU(0), uB = sp.getFrameU((s1 - s0) * lu);
+                float vA = sp.getFrameV(0), vB = sp.getFrameV((t1 - t0) * lv);
+                float[][] st = {{s0, t0, uA, vA}, {s0, t1, uA, vB}, {s1, t1, uB, vB}, {s1, t0, uB, vA}};
+                for (float[] c : st) {
+                    vc.vertex(pos, q.p[0] + c[0] * ux + c[1] * vx, q.p[1] + c[0] * uy + c[1] * vy, q.p[2] + c[0] * uz + c[1] * vz)
+                            .color(cr, cg, cb, ca)
+                            .texture(c[2], c[3])
+                            .overlay(overlay)
+                            .light(light)
+                            .normal(nrm, q.nx, q.ny, q.nz)
+                            .next();
+                }
+            }
+        }
     }
 
     /**
@@ -192,6 +236,10 @@ public final class GeoModel {
         boolean draw = handler == null || handler.drawCubes(g.name);
         for (Quad q : g.quads) {
             if (!draw || q.hull != hullPass) continue;
+            if (sprite != null) {
+                tiled(vc, pos, nrm, q, sprite, light, overlay, cr, cg, cb, ca);
+                continue;
+            }
             for (int i = 0; i < 4; i++) {
                 vc.vertex(pos, q.p[i * 3], q.p[i * 3 + 1], q.p[i * 3 + 2])
                         .color(cr, cg, cb, ca)

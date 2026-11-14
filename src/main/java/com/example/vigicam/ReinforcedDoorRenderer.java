@@ -1,6 +1,11 @@
 package com.example.vigicam;
 
+import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.texture.Sprite;
+import net.minecraft.client.texture.SpriteAtlasTexture;
+import net.minecraft.util.math.Direction;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
@@ -30,6 +35,9 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
     /** Luzes indicadoras: sempre acesas (sem sombreamento). */
     private static final Set<String> LIGHT_BONES = Set.of("locked", "locked2", "unlocked", "unlocked2", "green", "green2");
 
+    /** Grupo do modelo cujos cubos "block" pegam a textura do bloco vizinho. */
+    private static final String FRAME_BONE = "blocks";
+
     private static GeoModel model;
 
     public static GeoModel model() {
@@ -57,23 +65,49 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
         matrices.translate(0.5, 0.0, 0.5);
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f - facing));
         matrices.scale(1f / 16f, 1f / 16f, 1f / 16f);
-        draw(matrices, vcp, lit, OverlayTexture.DEFAULT_UV, state.get(ReinforcedDoorBlock.UNLOCKED), be.progress(tickDelta));
+        // quadro ("blocks"): textura do bloco vizinho; sem vizinho, o quadro fica invisível
+        Sprite frame = neighborSprite(world, be.getPos(), state.get(ReinforcedDoorBlock.FACING));
+        draw(matrices, vcp, lit, OverlayTexture.DEFAULT_UV, state.get(ReinforcedDoorBlock.UNLOCKED), be.progress(tickDelta), frame, frame != null);
         matrices.pop();
+    }
+
+    /** Textura do primeiro bloco vizinho à estrutura (esquerda, direita, em cima, embaixo); null se não houver. */
+    private static Sprite neighborSprite(World world, BlockPos master, Direction facing) {
+        BlockPos[] candidates = new BlockPos[3 * 2 + 3 * 2];
+        int n = 0;
+        for (int r = 0; r < ReinforcedDoorBlock.HEIGHT; r++) {
+            candidates[n++] = ReinforcedDoorBlock.partPos(master, facing, -1, r);
+            candidates[n++] = ReinforcedDoorBlock.partPos(master, facing, ReinforcedDoorBlock.WIDTH, r);
+        }
+        for (int c = 0; c < ReinforcedDoorBlock.WIDTH; c++) {
+            candidates[n++] = ReinforcedDoorBlock.partPos(master, facing, c, ReinforcedDoorBlock.HEIGHT);
+            candidates[n++] = ReinforcedDoorBlock.partPos(master, facing, c, -1);
+        }
+        for (BlockPos p : candidates) {
+            BlockState s = world.getBlockState(p);
+            if (s.isAir() || s.getBlock() instanceof ReinforcedDoorBlock || s.getRenderType() != BlockRenderType.MODEL) continue;
+            return MinecraftClient.getInstance().getBlockRenderManager().getModel(s).getParticleSprite();
+        }
+        return null;
     }
 
     /**
      * @param m        origem no centro-baixo da porta, 1 px = 1/16 de bloco
      * @param open     0 = fechada ... 1 = totalmente aberta
+     * @param frame    textura (do atlas de blocos) para os cubos "block" do grupo "blocks"; null = textura própria do modelo
+     * @param showFrame false esconde o grupo "blocks" (sem bloco vizinho)
      */
-    public static void draw(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay, boolean unlocked, float open) {
+    public static void draw(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay, boolean unlocked, float open,
+                            Sprite frame, boolean showFrame) {
         float eased = open * open * (3f - 2f * open);   // suaviza o começo e o fim do giro
         Map<String, float[]> scales = DoorAnimations.scales(unlocked ? "on" : "off");
 
-        // 1ª passada: o corpo, com a luz do mundo; 2ª passada: só as luzes indicadoras, em brilho máximo
-        for (int pass = 0; pass < 2; pass++) {
-            final boolean lightsPass = pass == 1;
-            model().render(m, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(TEXTURE)),
-                    lightsPass ? FULL_BRIGHT : light, overlay, new GeoModel.BoneHandler() {
+        // 0: corpo (luz do mundo); 1: luzes indicadoras (brilho máximo); 2: quadro "blocks" com a textura do vizinho
+        for (int pass = 0; pass < 3; pass++) {
+            if (pass == 2 && (frame == null || !showFrame)) continue;
+            final int thisPass = pass;
+            model().render(m, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(pass == 2 ? SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE : TEXTURE)),
+                    pass == 1 ? FULL_BRIGHT : light, overlay, new GeoModel.BoneHandler() {
                         @Override
                         public boolean transform(String bone, MatrixStack ms, float px, float py, float pz) {
                             float[] s = scales.get(bone);
@@ -93,9 +127,15 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
 
                         @Override
                         public boolean drawCubes(String bone) {
-                            return LIGHT_BONES.contains(bone) == lightsPass;
+                            boolean isFrame = FRAME_BONE.equals(bone);
+                            return switch (thisPass) {
+                                case 1 -> LIGHT_BONES.contains(bone);
+                                case 2 -> isFrame;
+                                // corpo: o quadro só entra aqui com a textura própria do modelo (item na mão)
+                                default -> !LIGHT_BONES.contains(bone) && (!isFrame || (frame == null && showFrame));
+                            };
                         }
-                    });
+                    }, pass == 2 ? frame : null);
         }
     }
 

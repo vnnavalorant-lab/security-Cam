@@ -40,6 +40,7 @@ import org.jetbrains.annotations.Nullable;
  * BlockEntity e o único que solta o item.
  * <ul>
  *   <li>Só quebra com picareta de diamante (ou melhor): tags mineable/pickaxe + needs_diamond_tool e requiresTool().</li>
+ *   <li>Travada = sólida. Destravada (aberta ou não) = só o quadro tem colisão, dá para atravessar o vão.</li>
  *   <li>Clique direito 1: destrava (animação "on"). Clique direito 2: abre, girando o pivô "door". Depois alterna abrir/fechar.</li>
  *   <li>Agachado + clique direito com a porta fechada e destravada: trava de novo (animação "off").</li>
  * </ul>
@@ -158,7 +159,7 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
-        if (!state.get(OPEN)) return VoxelShapes.fullCube();
+        if (!state.get(UNLOCKED)) return VoxelShapes.fullCube();   // travada: parede sólida; destravada: dá para atravessar o vão
         return OPEN_SHAPES[state.get(FACING).getHorizontal()][state.get(COL)][state.get(ROW)];
     }
 

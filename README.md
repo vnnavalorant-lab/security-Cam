@@ -57,6 +57,7 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
 - **Estrutura 3x3x1:** 3 blocos de largura, 3 de altura e só 1 de profundidade (Z). Precisa de espaço livre para os 9 blocos; o clique define o bloco central de baixo.
 - **Só quebra com picareta de diamante** (ou netherite): `mineable/pickaxe` + `needs_diamond_tool` + `requiresTool()`. Dureza 50 / resistência 1200 (como obsidiana). Quebrar qualquer parte remove a porta inteira e solta um item só.
 - **Uso:** clique direito 1x = **destrava** (animação `on`: luzes verdes). Clique direito de novo = **abre**, girando o pivô `door`; depois alterna abrir/fechar. Agachado + clique direito com a porta fechada = **trava de novo** (animação `off`: luzes vermelhas).
-- **Colisão:** fechada = parede 3x3x1 inteira; aberta = só o quadro (batentes e verga), o vão de 2 x 2,5 blocos fica livre.
+- **Colisão:** travada = parede 3x3x1 inteira; destravada (aberta ou fechada) = só o quadro (batentes e verga) tem colisão, então dá para atravessar o vão de 2 x 2,5 blocos.
+- **Quadro (`blocks`):** os cubos `block` do grupo `blocks` usam a textura do bloco vizinho (esquerda, direita, em cima ou embaixo, o primeiro encontrado, em ladrilhos de 16 px); sem bloco vizinho ficam invisíveis. No item da mão o quadro usa a textura do próprio modelo.
 - **Modelo:** `reinforced_door.bbmodel` -> `geo/reinforced_door.geo.json`, textura `textures/entity/reinforced_door.png`, animações `animations/reinforced_door.animation.json` (`on` esconde as luzes `locked`/`locked2`; `off` esconde `unlocked`/`unlocked2`/`green`/`green2`). Desenho em `ReinforcedDoorRenderer`.
 - Receita (ajuste em `data/vigicam/recipes/reinforced_door.json`): 5 ferros, 1 porta de ferro, 2 blocos de ferro, 1 redstone (III / IDI / BRB).
