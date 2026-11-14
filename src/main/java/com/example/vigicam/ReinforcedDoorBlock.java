@@ -173,11 +173,6 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
         return 1.0f;
     }
 
-    @Override
-    public boolean isTranslucent(BlockState state, BlockView world, BlockPos pos) {
-        return true;
-    }
-
     // ------------------------------------------------------------------ uso: destravar -> abrir/fechar
 
     @Override
