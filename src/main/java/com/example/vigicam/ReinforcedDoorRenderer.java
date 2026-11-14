@@ -66,8 +66,12 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f - facing));
         matrices.scale(1f / 16f, 1f / 16f, 1f / 16f);
         // quadro ("blocks"): textura do bloco vizinho; sem vizinho, o quadro fica invisível
-        Sprite frame = neighborSprite(world, be.getPos(), state.get(ReinforcedDoorBlock.FACING));
-        draw(matrices, vcp, lit, OverlayTexture.DEFAULT_UV, state.get(ReinforcedDoorBlock.UNLOCKED), be.progress(tickDelta), frame, frame != null);
+        Direction dir = state.get(ReinforcedDoorBlock.FACING);
+        Sprite frame = neighborSprite(world, be.getPos(), dir);
+        // luz de cada célula do quadro = luz do bloco do mundo naquele lugar (cai junto com os vizinhos, sem faixas escuras)
+        java.util.function.IntBinaryOperator cellLight = (col, row) ->
+                WorldRenderer.getLightmapCoordinates(world, ReinforcedDoorBlock.partPos(be.getPos(), dir, col, row));
+        draw(matrices, vcp, lit, OverlayTexture.DEFAULT_UV, state.get(ReinforcedDoorBlock.UNLOCKED), be.progress(tickDelta), frame, frame != null, cellLight);
         matrices.pop();
     }
 
@@ -98,7 +102,7 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
      * @param showFrame false esconde o grupo "blocks" (sem bloco vizinho)
      */
     public static void draw(MatrixStack m, VertexConsumerProvider vcp, int light, int overlay, boolean unlocked, float open,
-                            Sprite frame, boolean showFrame) {
+                            Sprite frame, boolean showFrame, java.util.function.IntBinaryOperator cellLight) {
         float eased = open * open * (3f - 2f * open);   // suaviza o começo e o fim do giro
         Map<String, float[]> scales = DoorAnimations.scales(unlocked ? "on" : "off");
 
@@ -106,7 +110,7 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
         for (int pass = 0; pass < 3; pass++) {
             if (pass == 2 && (frame == null || !showFrame)) continue;
             final int thisPass = pass;
-            model().render(m, vcp.getBuffer(RenderLayer.getEntityCutoutNoCull(pass == 2 ? SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE : TEXTURE)),
+            model().render(m, vcp.getBuffer(pass == 2 ? RenderLayer.getEntityCutout(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE) : RenderLayer.getEntityCutoutNoCull(TEXTURE)),
                     pass == 1 ? FULL_BRIGHT : light, overlay, new GeoModel.BoneHandler() {
                         @Override
                         public boolean transform(String bone, MatrixStack ms, float px, float py, float pz) {
@@ -135,7 +139,7 @@ public class ReinforcedDoorRenderer implements BlockEntityRenderer<ReinforcedDoo
                                 default -> !LIGHT_BONES.contains(bone) && (!isFrame || (frame == null && showFrame));
                             };
                         }
-                    }, pass == 2 ? frame : null);
+                    }, pass == 2 ? frame : null, pass == 2 ? cellLight : null);
         }
     }
 
