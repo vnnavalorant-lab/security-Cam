@@ -181,7 +181,7 @@ public class DroneEntity extends Entity {
             if (!client && player instanceof ServerPlayerEntity sp) {
                 RemoteItem.Link link = RemoteItem.Link.drone(sp.getServerWorld(), this);
                 if (sp.isSneaking()) RemoteItem.toggleLink(sp, stack, link);
-                else RemoteItem.connectTo(sp, stack, link);
+                else RemotePanel.open(sp);
             }
             return ActionResult.success(client);
         }

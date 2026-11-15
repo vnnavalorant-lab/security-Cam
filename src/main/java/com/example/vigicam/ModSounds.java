@@ -46,6 +46,18 @@ public final class ModSounds {
     public static final SoundEvent HACK_SYNC_FAIL = register("hack_sync_fail");
     public static final SoundEvent HACK_VICTORY = register("hack_victory");
 
+    /** Controle remoto (beeps do painel HTML): aba, armar, remover, remover todos, ping, menu, porta trancada/aberta, ver câmera, pilotar. */
+    public static final SoundEvent REMOTE_TAB = register("remote_tab");
+    public static final SoundEvent REMOTE_ARM = register("remote_arm");
+    public static final SoundEvent REMOTE_REMOVE = register("remote_remove");
+    public static final SoundEvent REMOTE_REMOVE_ALL = register("remote_remove_all");
+    public static final SoundEvent REMOTE_PING = register("remote_ping");
+    public static final SoundEvent REMOTE_MENU = register("remote_menu");
+    public static final SoundEvent REMOTE_DOOR_LOCK = register("remote_door_lock");
+    public static final SoundEvent REMOTE_DOOR_OPEN = register("remote_door_open");
+    public static final SoundEvent REMOTE_WATCH = register("remote_watch");
+    public static final SoundEvent REMOTE_PILOT = register("remote_pilot");
+
     private ModSounds() {}
 
     private static SoundEvent register(String name) {

@@ -1,5 +1,6 @@
 package com.example.vigicam;
 
+import net.minecraft.block.BlockState;
 import net.minecraft.block.HorizontalFacingBlock;
 import net.minecraft.client.item.TooltipContext;
 import net.minecraft.entity.Entity;
@@ -27,41 +28,53 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Controle remoto: guarda até 8 câmeras/drones vinculados.
- * Shift + botão direito numa câmera/drone vincula (ou desvincula); botão direito no ar conecta ao selecionado;
- * dentro da visão, a tecla "próximo dispositivo" (padrão R) troca para o próximo da lista.
+ * Controle remoto: guarda até 8 câmeras / drones / portas reforçadas vinculados.
+ * <ul>
+ *   <li>Botão direito (no ar, ou numa câmera/drone): abre o painel de dispositivos ({@link RemotePanel} / {@link RemotePanelScreen}).
+ *       Lá: duplo clique num item = ver a câmera, pilotar o drone ou abrir/fechar a porta; PING, lixeira e radar.</li>
+ *   <li>Shift + botão direito numa câmera, drone ou porta: vincula (ou desvincula).</li>
+ *   <li>Dentro da visão, a tecla "próximo dispositivo" (padrão R) passa para a próxima câmera/drone da lista.</li>
+ * </ul>
  */
 public class RemoteItem extends Item {
     public static final int MAX_LINKS = 8;
     public static final double MAX_DISTANCE = 160.0;
+    public static final int CAM = RemoteDevices.CAM, DRONE = RemoteDevices.DRONE, DOOR = RemoteDevices.DOOR;
 
-    public record Link(boolean drone, String dim, @Nullable BlockPos pos, @Nullable UUID id) {
-        public static Link camera(World w, BlockPos p) { return new Link(false, dimOf(w), p, null); }
-        public static Link drone(World w, DroneEntity d) { return new Link(true, dimOf(w), null, d.getUuid()); }
+    /**
+     * Dispositivo vinculado. {@code color} (índice da paleta) e {@code seq} (o número do ID, CAM-01...) são dados na hora de vincular e
+     * não mudam mais. Em drones, {@code pos} é só a última posição conhecida (para mostrar no radar quando estiver offline).
+     */
+    public record Link(int kind, String dim, @Nullable BlockPos pos, @Nullable UUID id, int color, int seq) {
+        public static Link camera(World w, BlockPos p) { return new Link(CAM, dimOf(w), p.toImmutable(), null, -1, 0); }
+        public static Link drone(World w, DroneEntity d) { return new Link(DRONE, dimOf(w), null, d.getUuid(), -1, 0); }
+        public static Link door(World w, BlockPos master) { return new Link(DOOR, dimOf(w), master.toImmutable(), null, -1, 0); }
+
+        public boolean drone() { return kind == DRONE; }
+        public boolean door() { return kind == DOOR; }
 
         boolean same(Link o) {
-            return drone == o.drone && dim.equals(o.dim) && Objects.equals(pos, o.pos) && Objects.equals(id, o.id);
+            if (kind != o.kind || !dim.equals(o.dim)) return false;
+            return kind == DRONE ? Objects.equals(id, o.id) : Objects.equals(pos, o.pos);
         }
+
+        Link styled(int color, int seq) { return new Link(kind, dim, pos, id, color, seq); }
+        Link at(BlockPos p) { return new Link(kind, dim, p, id, color, seq); }
     }
 
     public RemoteItem(Settings settings) { super(settings); }
 
     private static String dimOf(World w) { return w.getRegistryKey().getValue().toString(); }
 
+    public static String idOf(Link l) { return RemoteDevices.id(l.kind(), l.seq()); }
+
     // ------------------------------------------------------------------ uso
 
+    /** Botão direito no ar: abre o painel de dispositivos (e só depois, lá dentro, o jogador escolhe o que fazer). */
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
-        if (!world.isClient && user instanceof ServerPlayerEntity sp) {
-            List<Link> links = read(stack);
-            if (links.isEmpty()) {
-                msg(sp, "§eNenhum dispositivo vinculado. Shift + botão direito numa câmera ou drone para vincular.");
-            } else {
-                int sel = Math.floorMod(stack.getOrCreateNbt().getInt("Sel"), links.size());
-                connect(sp, links.get(sel), sel, links.size());
-            }
-        }
+        if (!world.isClient && user instanceof ServerPlayerEntity sp) RemotePanel.open(sp);
         return TypedActionResult.success(stack, world.isClient);
     }
 
@@ -69,10 +82,19 @@ public class RemoteItem extends Item {
     public ActionResult useOnBlock(ItemUsageContext ctx) {
         World w = ctx.getWorld();
         BlockPos pos = ctx.getBlockPos();
-        if (!(w.getBlockState(pos).getBlock() instanceof SurveillanceCameraBlock)) return ActionResult.PASS;
+        BlockState state = w.getBlockState(pos);
+        boolean camera = state.getBlock() instanceof SurveillanceCameraBlock;
+        boolean door = state.getBlock() instanceof ReinforcedDoorBlock;
+        if (!camera && !door) return ActionResult.PASS;
         if (!w.isClient && ctx.getPlayer() instanceof ServerPlayerEntity sp) {
-            if (sp.isSneaking()) toggleLink(sp, ctx.getStack(), Link.camera(w, pos));
-            else connectTo(sp, ctx.getStack(), Link.camera(w, pos));
+            if (sp.isSneaking()) {
+                Link link = camera ? Link.camera(w, pos) : Link.door(w, ReinforcedDoorBlock.masterPos(pos, state));
+                toggleLink(sp, ctx.getStack(), link);
+            } else if (camera) {
+                RemotePanel.open(sp);
+            } else {
+                return ActionResult.PASS;     // porta sem Shift: o clique é da própria porta (painel da senha)
+            }
         }
         return ActionResult.success(w.isClient);
     }
@@ -81,14 +103,14 @@ public class RemoteItem extends Item {
     public void appendTooltip(ItemStack stack, @Nullable World world, List<Text> tooltip, TooltipContext context) {
         List<Link> links = read(stack);
         tooltip.add(Text.literal("Vinculados: " + links.size() + "/" + MAX_LINKS).styled(s -> s.withColor(0xAAAAAA)));
-        tooltip.add(Text.literal("Shift + clique direito: vincular câmera/drone").styled(s -> s.withColor(0x777777)));
-        tooltip.add(Text.literal("Clique direito: conectar ao selecionado").styled(s -> s.withColor(0x777777)));
+        tooltip.add(Text.literal("Shift + clique direito: vincular câmera/drone/porta").styled(s -> s.withColor(0x777777)));
+        tooltip.add(Text.literal("Clique direito: abrir o painel de dispositivos").styled(s -> s.withColor(0x777777)));
     }
 
     // ------------------------------------------------------------------ vínculos
 
     public static void toggleLink(ServerPlayerEntity sp, ItemStack stack, Link link) {
-        List<Link> links = read(stack);
+        List<Link> links = readNorm(stack);
         int found = -1;
         for (int i = 0; i < links.size(); i++) if (links.get(i).same(link)) found = i;
         if (found >= 0) {
@@ -101,26 +123,14 @@ public class RemoteItem extends Item {
             return;
         } else {
             links.add(link);
+            normalize(links);
             stack.getOrCreateNbt().putInt("Sel", links.size() - 1);
             msg(sp, "§aDispositivo vinculado (" + links.size() + "/" + MAX_LINKS + ")");
         }
         write(stack, links);
     }
 
-    /** Conecta direto num dispositivo (selecionando-o se já estiver vinculado). */
-    public static void connectTo(ServerPlayerEntity sp, ItemStack stack, Link link) {
-        List<Link> links = read(stack);
-        for (int i = 0; i < links.size(); i++) {
-            if (links.get(i).same(link)) {
-                stack.getOrCreateNbt().putInt("Sel", i);
-                connect(sp, link, i, links.size());
-                return;
-            }
-        }
-        connect(sp, link, -1, 0);
-    }
-
-    /** Tecla "próximo dispositivo": passa para o seguinte da lista do controle que o jogador segura. */
+    /** Tecla "próximo dispositivo": passa para a próxima câmera/drone da lista (portas não têm visão e são puladas). */
     public static void cycle(ServerPlayerEntity sp) {
         ItemStack stack = sp.getMainHandStack();
         if (!(stack.getItem() instanceof RemoteItem)) stack = sp.getOffHandStack();
@@ -128,17 +138,36 @@ public class RemoteItem extends Item {
             msg(sp, "§eSegure o controle remoto para trocar de dispositivo.");
             return;
         }
-        List<Link> links = read(stack);
-        if (links.isEmpty()) return;
-        int sel = (Math.floorMod(stack.getOrCreateNbt().getInt("Sel"), links.size()) + 1) % links.size();
-        stack.getOrCreateNbt().putInt("Sel", sel);
-        connect(sp, links.get(sel), sel, links.size());
+        List<Link> links = readNorm(stack);
+        int n = links.size();
+        if (n == 0) return;
+        int sel = Math.floorMod(stack.getOrCreateNbt().getInt("Sel"), n);
+        for (int step = 1; step <= n; step++) {
+            int j = (sel + step) % n;
+            if (links.get(j).door()) continue;
+            stack.getOrCreateNbt().putInt("Sel", j);
+            int[] vp = viewPos(links, j);
+            connect(sp, links.get(j), vp[0], vp[1]);
+            return;
+        }
+    }
+
+    /** {posição entre os dispositivos com visão (câmeras e drones), total deles}, para o "2/5" do HUD. */
+    public static int[] viewPos(List<Link> links, int i) {
+        int idx = 0, count = 0;
+        for (int j = 0; j < links.size(); j++) {
+            if (links.get(j).door()) continue;
+            if (j < i) idx++;
+            count++;
+        }
+        return new int[]{idx, count};
     }
 
     // ------------------------------------------------------------------ conexão
 
     public static boolean connect(ServerPlayerEntity sp, Link link, int index, int count) {
         ServerWorld w = sp.getServerWorld();
+        if (link.door()) return false;
         if (!dimOf(w).equals(link.dim())) {
             msg(sp, "§cDispositivo em outra dimensão.");
             return false;
@@ -170,19 +199,47 @@ public class RemoteItem extends Item {
         return true;
     }
 
+    /** Abre a porta (se estiver fechada) ou fecha e tranca (se estiver aberta), à distância. Devolve a mensagem do painel. */
+    public static String toggleDoor(ServerPlayerEntity sp, Link link) {
+        ServerWorld w = sp.getServerWorld();
+        String id = idOf(link);
+        BlockPos p = link.pos();
+        if (!dimOf(w).equals(link.dim())) return "Dispositivo em outra dimensao.";
+        if (p == null || !w.isChunkLoaded(p) || !(w.getBlockState(p).getBlock() instanceof ReinforcedDoorBlock door)) {
+            return id + " indisponivel.";
+        }
+        if (p.getSquaredDistance(sp.getPos()) > MAX_DISTANCE * MAX_DISTANCE) return id + " fora de alcance.";
+        if (!hasAccess(sp, link)) return "Sem acesso a " + id + ".";
+        BlockState st = w.getBlockState(p);
+        if (st.get(ReinforcedDoorBlock.OPEN)) {
+            door.remoteClose(w, p, st);
+            return id + " foi trancada.";
+        }
+        door.remoteOpen(w, p, st);
+        return id + " foi aberta.";
+    }
+
     /**
      * O jogador pode usar este dispositivo? Dispositivos de outro jogador só respondem ao dono (ou a quem invadiu a rede dele
      * com o Pendrive Hacker, enquanto durar o acesso). Se não puder, o próprio método avisa o motivo.
      */
     private static boolean hasAccess(ServerPlayerEntity sp, Link link) {
         ServerWorld w = sp.getServerWorld();
-        java.util.UUID owner = null;
+        UUID owner = null;
         String name = "";
         if (link.drone()) {
             if (link.id() != null && w.getEntity(link.id()) instanceof DroneEntity d) {
                 owner = d.getOwner();
                 name = d.getOwnerName();
             }
+        } else if (link.door()) {
+            // porta: só o dono (ou o hacker) comanda; porta sem dono (mundo antigo) é livre
+            if (link.pos() != null && w.isChunkLoaded(link.pos())
+                    && w.getBlockEntity(link.pos()) instanceof ReinforcedDoorBlockEntity be && be.hasOwner() && !be.isOwner(sp)) {
+                HackManager.deny(sp, be.getOwnerUuid(), "");
+                return false;
+            }
+            return true;
         } else if (link.pos() != null && w.isChunkLoaded(link.pos())
                 && w.getBlockEntity(link.pos()) instanceof SurveillanceCameraBlockEntity cam) {
             owner = cam.getOwner();
@@ -204,22 +261,64 @@ public class RemoteItem extends Item {
         NbtList list = tag.getList("Links", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < list.size(); i++) {
             NbtCompound c = list.getCompound(i);
-            boolean drone = c.getBoolean("Drone");
+            int kind = c.contains("Kind") ? c.getInt("Kind") : (c.getBoolean("Drone") ? DRONE : CAM);   // vínculos antigos só têm "Drone"
             String dim = c.getString("Dim");
-            if (drone) out.add(new Link(true, dim, null, c.getUuid("Id")));
-            else out.add(new Link(false, dim, NbtHelper.toBlockPos(c.getCompound("Pos")), null));
+            UUID id = c.containsUuid("Id") ? c.getUuid("Id") : null;
+            BlockPos pos = c.contains("Pos", NbtElement.COMPOUND_TYPE) ? NbtHelper.toBlockPos(c.getCompound("Pos")) : null;
+            if (kind == DRONE ? id == null : pos == null) continue;
+            out.add(new Link(kind, dim, pos, id, c.contains("Col") ? c.getInt("Col") : -1, c.getInt("Seq")));
         }
         return out;
     }
 
-    private static void write(ItemStack stack, List<Link> links) {
+    /** Lê os vínculos e dá cor e número (CAM-01...) aos que ainda não têm (vínculos de versões antigas). */
+    public static List<Link> readNorm(ItemStack stack) {
+        List<Link> links = read(stack);
+        if (normalize(links)) write(stack, links);
+        return links;
+    }
+
+    private static boolean normalize(List<Link> links) {
+        boolean changed = false;
+        boolean[] usedColor = new boolean[RemoteDevices.RGB.length];
+        for (Link l : links) if (l.color() >= 0 && l.color() < usedColor.length) usedColor[l.color()] = true;
+        for (int i = 0; i < links.size(); i++) {
+            Link l = links.get(i);
+            int color = l.color(), seq = l.seq();
+            if (color < 0 || color >= usedColor.length) {
+                color = 0;
+                while (color < usedColor.length && usedColor[color]) color++;
+                if (color >= usedColor.length) color = i % usedColor.length;
+                else usedColor[color] = true;
+            }
+            if (seq <= 0) {
+                seq = 1;
+                while (seqUsed(links, l.kind(), seq)) seq++;
+            }
+            if (color != l.color() || seq != l.seq()) {
+                links.set(i, l.styled(color, seq));
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static boolean seqUsed(List<Link> links, int kind, int seq) {
+        for (Link x : links) if (x.kind() == kind && x.seq() == seq) return true;
+        return false;
+    }
+
+    static void write(ItemStack stack, List<Link> links) {
         NbtList list = new NbtList();
         for (Link l : links) {
             NbtCompound c = new NbtCompound();
-            c.putBoolean("Drone", l.drone());
+            c.putInt("Kind", l.kind());
+            c.putBoolean("Drone", l.drone());      // compatibilidade com versões antigas
             c.putString("Dim", l.dim());
-            if (l.drone()) c.putUuid("Id", l.id());
-            else c.put("Pos", NbtHelper.fromBlockPos(l.pos()));
+            if (l.id() != null) c.putUuid("Id", l.id());
+            if (l.pos() != null) c.put("Pos", NbtHelper.fromBlockPos(l.pos()));
+            c.putInt("Col", l.color());
+            c.putInt("Seq", l.seq());
             list.add(c);
         }
         NbtCompound tag = stack.getOrCreateNbt();

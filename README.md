@@ -108,3 +108,22 @@ Receita: 5 ferro, 2 vidraça e 1 redstone (III / GRG / I I).
   Se preferir que câmeras e drones continuem livres para todos (e o pendrive valha só para portas e antenas), troque `HackManager.RESTRICT_ACCESS` para `false`.
 - **Segurança:** o puzzle é jogado no cliente, mas o servidor acompanha a sessão (`HACK_ACTION`: inserir / etapa / erro / ejetar): confere antena, dono, distância
   (12 blocos), pendrive na mão, as 3 etapas em ordem e um intervalo mínimo de 250 ms entre elas. Só o servidor concede o acesso.
+
+## Controle remoto: painel de dispositivos
+
+Agora **botão direito no controle remoto abre primeiro o painel** (`RemotePanelScreen`, o "Controle Remoto Minecraft" do HTML) e só depois, lá dentro, se escolhe o que fazer.
+
+- **Abas** CAMERAS / DRONES / PORTAS (com a contagem) e, no topo, os contadores ONLINE / OFFLINE.
+- **Cartões** (2 colunas, com rolagem pela roda do mouse): ícone, nome, **ID colorido** (CAM-01, DRN-01, DOOR-01), coordenadas, seta + distância + direção (N, NE, L, SE, S, SO, O, NO, e ACIMA/ABAIXO),
+  estado (ONLINE / OFFLINE, e TRANCADA / ABERTA nas portas) e, nos drones, a barra de sinal.
+- **PING:** o dispositivo apita e solta partículas **na cor dele** no mundo por 3,2 s (`RemotePings`); o cartão e o ponto do radar piscam.
+- **Lixeira:** 1º clique mostra "SIM?" (3 s), o 2º tira o dispositivo do controle. **APAGAR TODOS** pede confirmação ("CONFIRMAR?").
+- **Radar de 120 blocos** com todos os dispositivos (câmera = quadrado, drone = losango, porta = retângulo), varredura animada, o selecionado em destaque e as informações dele embaixo.
+  Clicar num ponto seleciona e vai até o cartão.
+- **Duplo clique** num cartão ou ponto abre o menu: **VER VIDEOS AO VIVO** (câmera), **PILOTAR DRONE**, **ABRIR PORTA / FECHAR PORTA**. Dispositivo OFFLINE aparece com os botões desativados.
+- **Sons:** os beeps do HTML (`remote_tab`, `remote_arm`, `remote_remove`, `remote_remove_all`, `remote_ping`, `remote_menu`, `remote_door_lock`, `remote_door_open`, `remote_watch`, `remote_pilot`), gerados por `tools/gen_remote_sounds.py`.
+- **Portas no controle:** Shift + botão direito numa porta reforçada vincula/desvincula (até 8 dispositivos no total). Só o dono da porta (ou quem invadiu a rede dele com o Pendrive Hacker) vincula e comanda; abrir/fechar à distância não pede a senha.
+- **Cor e ID** de cada dispositivo são dados na hora de vincular e não mudam mais (vínculos antigos ganham os seus na primeira vez que o painel abre).
+- Offline = bloco/entidade não carregado, destruído, ou sem acesso (por exemplo, o acesso do pendrive acabou). Dispositivos em outra dimensão aparecem com o nome da dimensão.
+- A tecla "próximo dispositivo" (R), dentro da visão, passa para a próxima câmera/drone da lista e pula as portas.
+- Diferenças em relação ao HTML: o botão "RESTAURAR DEMO" não existe (era só da demonstração) e, como o mod não tem bateria nos drones, a barra mostra o **sinal** (cai com a distância).

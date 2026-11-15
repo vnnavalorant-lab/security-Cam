@@ -304,6 +304,19 @@ public class ReinforcedDoorBlock extends HorizontalFacingBlock implements BlockE
         world.scheduleBlockTick(master, this, OPEN_DELAY);
     }
 
+    /** Controle remoto: destrava e abre a porta (com o som), sem painel de senha. */
+    public void remoteOpen(World world, BlockPos master, BlockState state) {
+        hackOpen(world, master, state);
+    }
+
+    /** Controle remoto: fecha e tranca de novo (igual ao clique direito numa porta aberta). */
+    public void remoteClose(World world, BlockPos master, BlockState state) {
+        apply(world, master, state, false, false);
+        play(world, master, SoundEvents.BLOCK_IRON_DOOR_CLOSE, 1.0f);
+        play(world, master, SoundEvents.BLOCK_LEVER_CLICK, 0.5f);
+        world.emitGameEvent(null, GameEvent.BLOCK_CLOSE, master);
+    }
+
     /** Igual a {@link #unlockAndOpen}, mas o som de destravar toca para todos (o hacker não tem painel que o toque). */
     private void hackOpen(World world, BlockPos master, BlockState state) {
         apply(world, master, state, true, false);

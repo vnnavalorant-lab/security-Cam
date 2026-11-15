@@ -29,5 +29,15 @@
   "hack_stage_lock_1": { "sounds": [ { "name": "vigicam:hack_stage_lock_1", "stream": false } ] },
   "hack_stage_lock_2": { "sounds": [ { "name": "vigicam:hack_stage_lock_2", "stream": false } ] },
   "hack_sync_fail": { "sounds": [ { "name": "vigicam:hack_sync_fail", "stream": false } ] },
-  "hack_victory": { "sounds": [ { "name": "vigicam:hack_victory", "stream": false } ] }
+  "hack_victory": { "sounds": [ { "name": "vigicam:hack_victory", "stream": false } ] },
+  "remote_tab": { "sounds": [ { "name": "vigicam:remote_tab", "stream": false } ] },
+  "remote_arm": { "sounds": [ { "name": "vigicam:remote_arm", "stream": false } ] },
+  "remote_remove": { "sounds": [ { "name": "vigicam:remote_remove", "stream": false } ] },
+  "remote_remove_all": { "sounds": [ { "name": "vigicam:remote_remove_all", "stream": false } ] },
+  "remote_ping": { "sounds": [ { "name": "vigicam:remote_ping", "stream": false } ] },
+  "remote_menu": { "sounds": [ { "name": "vigicam:remote_menu", "stream": false } ] },
+  "remote_door_lock": { "sounds": [ { "name": "vigicam:remote_door_lock", "stream": false } ] },
+  "remote_door_open": { "sounds": [ { "name": "vigicam:remote_door_open", "stream": false } ] },
+  "remote_watch": { "sounds": [ { "name": "vigicam:remote_watch", "stream": false } ] },
+  "remote_pilot": { "sounds": [ { "name": "vigicam:remote_pilot", "stream": false } ] }
 }

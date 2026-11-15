@@ -50,6 +50,9 @@ public class VigiCam implements ModInitializer {
     public static final Identifier HACK_RESULT = new Identifier(MOD_ID, "hack_result");
     public static final Identifier HACK_END = new Identifier(MOD_ID, "hack_end");
     public static final Identifier HACK_ACTION = new Identifier(MOD_ID, "hack_action");
+    // painel do controle remoto: servidor -> cliente (lista de dispositivos) e cliente -> servidor (ping / usar / remover)
+    public static final Identifier REMOTE_DATA = new Identifier(MOD_ID, "remote_data");
+    public static final Identifier REMOTE_ACTION = new Identifier(MOD_ID, "remote_action");
     // servidor -> clientes próximos: quem está pilotando (para as mãos nos controles)
     public static final Identifier PILOT_SYNC = new Identifier(MOD_ID, "pilot_sync");
     // servidor -> cliente: o drone perdeu o sinal (sai da visão do drone)
@@ -113,6 +116,7 @@ public class VigiCam implements ModInitializer {
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "remote"), REMOTE_ITEM);
         Registry.register(Registries.ITEM, new Identifier(MOD_ID, "pendrive_hacker"), PENDRIVE_HACKER_ITEM);
         HackManager.init();
+        RemotePings.init();
 
         DRONE = Registry.register(Registries.ENTITY_TYPE, new Identifier(MOD_ID, "drone"),
                 FabricEntityTypeBuilder.<DroneEntity>create(SpawnGroup.MISC, DroneEntity::new)
@@ -152,6 +156,12 @@ public class VigiCam implements ModInitializer {
             BlockPos pos = buf.readBlockPos();
             String pin = buf.readString(16);
             server.execute(() -> ReinforcedDoorBlock.handleAction(player, type, pos, pin));
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(REMOTE_ACTION, (server, player, handler, buf, sender) -> {
+            int type = buf.readByte();
+            int index = buf.readInt();
+            server.execute(() -> RemotePanel.handle(player, type, index));
         });
 
         ServerPlayNetworking.registerGlobalReceiver(HACK_ACTION, (server, player, handler, buf, sender) -> {

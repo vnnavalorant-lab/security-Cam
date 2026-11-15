@@ -76,17 +76,18 @@ public class SurveillanceCameraBlock extends HorizontalFacingBlock implements Bl
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player,
                               Hand hand, BlockHitResult hit) {
         if (!world.isClient && player instanceof ServerPlayerEntity sp) {
+            // com o controle remoto na mão o clique abre o painel de dispositivos (lá dentro se escolhe o que fazer)
+            if (player.getStackInHand(hand).getItem() instanceof RemoteItem) {
+                RemotePanel.open(sp);
+                return ActionResult.SUCCESS;
+            }
             // câmera de outro jogador: só o dono (ou quem invadiu a rede dele com o Pendrive Hacker) usa
             if (world.getBlockEntity(pos) instanceof SurveillanceCameraBlockEntity be && !HackManager.canUse(sp, be.getOwner())) {
                 HackManager.deny(sp, be.getOwner(), be.getOwnerName());
                 return ActionResult.SUCCESS;
             }
-            if (player.getStackInHand(hand).getItem() instanceof RemoteItem) {
-                RemoteItem.connectTo(sp, player.getStackInHand(hand), RemoteItem.Link.camera(world, pos));
-            } else {
-                DroneControl.release(sp.getUuid());
-                VigiCam.sendViewCamera(sp, pos, state.get(FACING).asRotation(), -1, 0);
-            }
+            DroneControl.release(sp.getUuid());
+            VigiCam.sendViewCamera(sp, pos, state.get(FACING).asRotation(), -1, 0);
         }
         return ActionResult.SUCCESS;
     }

@@ -94,6 +94,7 @@ public class VigiCamClient implements ClientModInitializer {
             float yaw = buf.readFloat();
             int idx = buf.readInt(), cnt = buf.readInt();
             client.execute(() -> {
+                if (client.currentScreen instanceof RemotePanelScreen) client.setScreen(null);   // veio do painel do controle
                 boolean fresh = CameraViewClient.startBlock(client, pos, yaw, idx, cnt);
                 applyShader(client, fresh);
                 if (fresh) sendViewState(true);
@@ -103,6 +104,7 @@ public class VigiCamClient implements ClientModInitializer {
             int id = buf.readInt();
             int idx = buf.readInt(), cnt = buf.readInt();
             client.execute(() -> {
+                if (client.currentScreen instanceof RemotePanelScreen) client.setScreen(null);
                 boolean fresh = CameraViewClient.startDrone(client, id, idx, cnt);
                 applyShader(client, fresh);
                 if (fresh) sendViewState(true);
@@ -123,6 +125,27 @@ public class VigiCamClient implements ClientModInitializer {
             client.execute(() -> {
                 if (client.currentScreen instanceof DoorPanelScreen screen) screen.onResult(type, ok);
                 else if (client.currentScreen instanceof BiometryPanelScreen screen) screen.onResult(type, ok);
+            });
+        });
+
+        // controle remoto: lista de dispositivos (abre o painel quando o servidor manda "open"; senão só atualiza o aberto)
+        ClientPlayNetworking.registerGlobalReceiver(VigiCam.REMOTE_DATA, (client, handler, buf, sender) -> {
+            boolean open = buf.readBoolean();
+            String msg = buf.readString();
+            int n = buf.readVarInt();
+            java.util.List<RemotePanelScreen.Entry> list = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                int kind = buf.readByte(), seq = buf.readByte(), color = buf.readByte();
+                boolean online = buf.readBoolean();
+                String name = buf.readString(), dim = buf.readString();
+                boolean hasPos = buf.readBoolean();
+                int x = buf.readInt(), y = buf.readInt(), z = buf.readInt();
+                boolean locked = buf.readBoolean();
+                list.add(new RemotePanelScreen.Entry(i, kind, seq, color, online, name, dim, hasPos, x, y, z, locked));
+            }
+            client.execute(() -> {
+                if (client.currentScreen instanceof RemotePanelScreen screen) screen.update(list, msg);
+                else if (open) client.setScreen(new RemotePanelScreen(list, msg));
             });
         });
 
