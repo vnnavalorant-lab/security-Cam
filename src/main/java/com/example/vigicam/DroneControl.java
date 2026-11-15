@@ -18,6 +18,10 @@ public final class DroneControl {
     private static final Map<UUID, DroneEntity> CONTROLLING = new HashMap<>();
 
     public static boolean begin(ServerPlayerEntity sp, DroneEntity drone, int index, int count) {
+        return begin(sp, drone, index, count, 0);
+    }
+
+    public static boolean begin(ServerPlayerEntity sp, DroneEntity drone, int index, int count, int seq) {
         if (!HackManager.canUse(sp, drone.getOwner())) {   // drone de outro jogador (a menos que a rede dele tenha sido invadida)
             HackManager.deny(sp, drone.getOwner(), drone.getOwnerName());
             return false;
@@ -34,7 +38,7 @@ public final class DroneControl {
         drone.setController(sp.getUuid());
         CONTROLLING.put(sp.getUuid(), drone);
         INPUTS.put(sp.getUuid(), new Input(0, 0, 0, drone.getYaw(), drone.getPitch(), sp.getWorld().getTime()));
-        VigiCam.sendViewDrone(sp, drone.getId(), index, count);
+        VigiCam.sendViewDrone(sp, drone.getId(), index, count, seq);
         return true;
     }
 

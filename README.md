@@ -127,3 +127,10 @@ Agora **botão direito no controle remoto abre primeiro o painel** (`RemotePanel
 - Offline = bloco/entidade não carregado, destruído, ou sem acesso (por exemplo, o acesso do pendrive acabou). Dispositivos em outra dimensão aparecem com o nome da dimensão.
 - A tecla "próximo dispositivo" (R), dentro da visão, passa para a próxima câmera/drone da lista e pula as portas.
 - Diferenças em relação ao HTML: o botão "RESTAURAR DEMO" não existe (era só da demonstração) e, como o mod não tem bateria nos drones, a barra mostra o **sinal** (cai com a distância).
+
+### Ajustes do painel do controle
+
+- **Portas: ABRIR TODAS / FECHAR TODAS** (rodapé da aba PORTAS). Abre, ou fecha e tranca, todas as portas do controle de uma vez. Pula as offline, longe (mais de 160 blocos), de outra dimensão ou sem acesso, e o rodapé avisa quantas foram. Só atua nas portas que o jogador pode comandar (dono / hacker).
+- **Numeração igual à do painel, fora dele:** o HUD da visão mostra o mesmo ID do painel (CAM-02, DRN-01) e o tooltip do controle lista por tipo ("Portas (3): DOOR-01, DOOR-02, DOOR-04"). A lista é a mesma do painel, então apagar pelo painel atualiza tudo.
+- Apagar dispositivos no painel agora mantém o "dispositivo atual" da tecla R no mesmo dispositivo (antes ele podia passar para outro, deslocando a ordem).
+- Lixeira centralizada no botão.

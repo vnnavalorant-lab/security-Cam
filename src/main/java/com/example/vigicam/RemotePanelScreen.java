@@ -47,6 +47,7 @@ public class RemotePanelScreen extends Screen {
     private static final int RX = 384, RY = 53, RS = 112;                            // radar
     private static final int RANGE = 120;
     private static final int FBX = 418, FBY = 221, FBW = 78, FBH = 13;               // botão APAGAR TODOS
+    private static final int DBW = 70, OPEN_X = FBX - 4 - DBW, CLOSE_X = OPEN_X - 4 - DBW;   // ABRIR TODAS / FECHAR TODAS (aba de portas)
 
     // perfis dos recortes em degraus {altura do degrau, recuo} do HTML (clip-path .stair), na metade dos pixels
     private static final int[] O1 = {6, 14, 14, 6}, O2 = {5, 12, 12, 5}, O3 = {4, 11, 11, 4}, BEZEL = {3, 9, 9, 3}, SCREEN = {2, 7, 7, 2};
@@ -254,6 +255,16 @@ public class RemotePanelScreen extends Screen {
             }
         }
 
+        // aba de portas: abrir / fechar todas de uma vez
+        if (tab == RemoteDevices.DOOR && in(x, y, CLOSE_X, FBY, DBW * 2 + 4, FBH)) {
+            boolean open = x >= OPEN_X;
+            if (!anyDoorOnline()) return true;
+            armed = null;
+            snd(open ? ModSounds.REMOTE_DOOR_OPEN : ModSounds.REMOTE_DOOR_LOCK);
+            send(RemotePanel.ACT_DOORS_ALL, open ? 1 : 0);
+            return true;
+        }
+
         // APAGAR TODOS (precisa confirmar)
         if (in(x, y, FBX, FBY, FBW, FBH)) {
             if (visible().isEmpty()) return true;
@@ -320,6 +331,11 @@ public class RemotePanelScreen extends Screen {
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private boolean anyDoorOnline() {
+        for (Entry e : entries) if (e.kind() == RemoteDevices.DOOR && e.online()) return true;
+        return false;
     }
 
     private void arm(String k) {
@@ -668,12 +684,13 @@ public class RemotePanelScreen extends Screen {
             if ((now / 500) % 2 == 1) c.fill(tr[0] + 1, tr[1] + 1, tr[0] + tr[2] - 1, tr[1] + tr[3] - 1, 0xFF8F1414);
             textShadow(c, "SIM?", tr[0] + (tr[2] - tw("SIM?", 0.5f)) / 2, tr[1] + 3, 0.5f, 0xFFFFFF);
         } else {
-            int tx = tr[0] + 2, ty = tr[1] + 1;                 // lixeira em pixel art (8x8)
-            c.fill(tx + 2, ty, tx + 6, ty + 1, 0xFFFFFFFF);
-            c.fill(tx, ty + 1, tx + 8, ty + 2, 0xFFFFFFFF);
-            c.fill(tx + 1, ty + 2, tx + 7, ty + 8, 0xFFFFFFFF);
-            c.fill(tx + 2, ty + 3, tx + 3, ty + 7, 0xFF6B7684);
-            c.fill(tx + 5, ty + 3, tx + 6, ty + 7, 0xFF6B7684);
+            // lixeira em pixel art 6x6, centrada no botão de 10x10 (2 px de folga em cada lado)
+            int tx = tr[0] + (tr[2] - 6) / 2, ty = tr[1] + (tr[3] - 6) / 2;
+            int white = 0xFFFFFFFF, slot = red ? 0xFFC21E1E : 0xFF6B7684;
+            c.fill(tx + 2, ty, tx + 4, ty + 1, white);              // alça
+            c.fill(tx, ty + 1, tx + 6, ty + 2, white);              // tampa
+            c.fill(tx + 1, ty + 2, tx + 5, ty + 6, white);          // corpo
+            c.fill(tx + 2, ty + 3, tx + 4, ty + 5, slot);           // fendas
         }
     }
 
@@ -804,7 +821,16 @@ public class RemotePanelScreen extends Screen {
     private void drawFoot(DrawContext c, double mx, double my) {
         clip(c, SX0, SY0, SX1 - SX0, SY1 - SY0, SCREEN, SX0, SY1 - 19, SX1, SY1, 0xFF2A343D);
         c.fill(SX0 + 7, SY1 - 19, SX1 - 7, SY1 - 17, 0xFF1A2128);
-        text(c, fit(msg, 0.7f, FBX - SX0 - 22), SX0 + 11, SY1 - 13, 0.7f, 0xB9C5D3);
+        int msgRight = tab == RemoteDevices.DOOR ? CLOSE_X : FBX;
+        text(c, fit(msg, 0.7f, msgRight - SX0 - 22), SX0 + 11, SY1 - 13, 0.7f, 0xB9C5D3);
+
+        if (tab == RemoteDevices.DOOR) {
+            boolean none = !anyDoorOnline();
+            fbtnColors(c, CLOSE_X, FBY, DBW, FBH, "FECHAR TODAS", 0xFFC9962B, 0xFFF7DA8A, 0xFF7A5A12,
+                    !none && in(mx, my, CLOSE_X, FBY, DBW, FBH), none, 0xFF2A343D);
+            fbtnColors(c, OPEN_X, FBY, DBW, FBH, "ABRIR TODAS", 0xFF13A04A, 0xFF66F29C, 0xFF0A6630,
+                    !none && in(mx, my, OPEN_X, FBY, DBW, FBH), none, 0xFF2A343D);
+        }
 
         boolean empty = visible().isEmpty();
         boolean red = armed != null && armed.equals("all:" + tab);

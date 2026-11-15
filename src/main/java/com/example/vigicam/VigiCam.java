@@ -199,6 +199,11 @@ public class VigiCam implements ModInitializer {
     // --- rede: servidor -> cliente ---
     /** index/count: posição do dispositivo na lista do controle remoto (-1/0 = sem lista). */
     public static void sendViewCamera(ServerPlayerEntity sp, BlockPos pos, float yaw, int index, int count) {
+        sendViewCamera(sp, pos, yaw, index, count, 0);
+    }
+
+    /** {@code seq}: número do dispositivo no painel do controle (CAM-02 -> 2), ou 0 se a visão não veio do controle. */
+    public static void sendViewCamera(ServerPlayerEntity sp, BlockPos pos, float yaw, int index, int count, int seq) {
         // o pendrive hacker precisa saber quem está olhando uma câmera de quem (para tirar da visão quando o acesso acabar)
         java.util.UUID camOwner = sp.getServerWorld().getBlockEntity(pos) instanceof SurveillanceCameraBlockEntity cam ? cam.getOwner() : null;
         HackManager.noteView(sp.getUuid(), camOwner);
@@ -207,6 +212,7 @@ public class VigiCam implements ModInitializer {
         buf.writeFloat(yaw);
         buf.writeInt(index);
         buf.writeInt(count);
+        buf.writeInt(seq);
         ServerPlayNetworking.send(sp, VIEW_CAMERA, buf);
     }
 
@@ -215,12 +221,17 @@ public class VigiCam implements ModInitializer {
     }
 
     public static void sendViewDrone(ServerPlayerEntity sp, int entityId, int index, int count) {
+        sendViewDrone(sp, entityId, index, count, 0);
+    }
+
+    public static void sendViewDrone(ServerPlayerEntity sp, int entityId, int index, int count, int seq) {
         java.util.UUID droneOwner = sp.getServerWorld().getEntityById(entityId) instanceof DroneEntity dr ? dr.getOwner() : null;
         HackManager.noteView(sp.getUuid(), droneOwner);
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeInt(entityId);
         buf.writeInt(index);
         buf.writeInt(count);
+        buf.writeInt(seq);
         ServerPlayNetworking.send(sp, VIEW_DRONE, buf);
     }
 }

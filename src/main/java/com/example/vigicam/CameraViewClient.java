@@ -45,6 +45,8 @@ public final class CameraViewClient {
 
     // posição da lista do controle remoto
     private static int index = -1, count = 0;
+    /** Número do dispositivo no painel do controle (CAM-02 -> 2); 0 = visão direta, sem controle. */
+    private static int seq = 0;
 
     // ângulos da visão (mouse). O corpo/cabeça do jogador NÃO gira enquanto ele usa a câmera/drone:
     // o mouse mexe só aqui (ver EntityMixin.changeLookDirection).
@@ -71,9 +73,10 @@ public final class CameraViewClient {
     public static int getDroneId() { return droneId; }
     public static int getIndex() { return index; }
     public static int getCount() { return count; }
+    public static int getSeq() { return seq; }
 
     /** @return true se a visão acabou de ser ativada (e o shader precisa ser carregado). */
-    public static boolean startBlock(MinecraftClient mc, BlockPos p, float yaw, int idx, int cnt) {
+    public static boolean startBlock(MinecraftClient mc, BlockPos p, float yaw, int idx, int cnt, int sq) {
         boolean fresh = begin(mc);
         kind = Kind.BLOCK;
         pos = p;
@@ -85,10 +88,11 @@ public final class CameraViewClient {
         droneId = -1;
         index = idx;
         count = cnt;
+        seq = sq;
         return fresh;
     }
 
-    public static boolean startDrone(MinecraftClient mc, int id, int idx, int cnt) {
+    public static boolean startDrone(MinecraftClient mc, int id, int idx, int cnt, int sq) {
         boolean fresh = begin(mc);
         kind = Kind.DRONE;
         droneId = id;
@@ -98,6 +102,7 @@ public final class CameraViewClient {
         manual = false;
         index = idx;
         count = cnt;
+        seq = sq;
         return fresh;
     }
 
@@ -121,6 +126,7 @@ public final class CameraViewClient {
         droneId = -1;
         index = -1;
         count = 0;
+        seq = 0;
         mode = Mode.CAM;
     }
 

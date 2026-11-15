@@ -102,7 +102,15 @@ public class RemoteItem extends Item {
     @Override
     public void appendTooltip(ItemStack stack, @Nullable World world, List<Text> tooltip, TooltipContext context) {
         List<Link> links = read(stack);
+        normalize(links);       // mesma numeração que o servidor dá (CAM-01...), igual à do painel
         tooltip.add(Text.literal("Vinculados: " + links.size() + "/" + MAX_LINKS).styled(s -> s.withColor(0xAAAAAA)));
+        for (int kind = CAM; kind <= DOOR; kind++) {
+            List<String> ids = new ArrayList<>();
+            for (Link l : links) if (l.kind() == kind) ids.add(idOf(l));
+            if (ids.isEmpty()) continue;
+            String label = kind == CAM ? "Câmeras" : kind == DRONE ? "Drones" : "Portas";
+            tooltip.add(Text.literal(label + " (" + ids.size() + "): " + String.join(", ", ids)).styled(s -> s.withColor(0x888888)));
+        }
         tooltip.add(Text.literal("Shift + clique direito: vincular câmera/drone/porta").styled(s -> s.withColor(0x777777)));
         tooltip.add(Text.literal("Clique direito: abrir o painel de dispositivos").styled(s -> s.withColor(0x777777)));
     }
@@ -114,7 +122,9 @@ public class RemoteItem extends Item {
         int found = -1;
         for (int i = 0; i < links.size(); i++) if (links.get(i).same(link)) found = i;
         if (found >= 0) {
+            Link before = selected(stack, links);
             links.remove(found);
+            keepSelection(stack, links, before);
             msg(sp, "§eDispositivo desvinculado (" + links.size() + "/" + MAX_LINKS + ")");
         } else if (links.size() >= MAX_LINKS) {
             msg(sp, "§cO controle já está cheio (" + MAX_LINKS + ").");
@@ -183,7 +193,7 @@ public class RemoteItem extends Item {
                 msg(sp, "§cDrone fora de alcance.");
                 return false;
             }
-            return DroneControl.begin(sp, d, index, count);
+            return DroneControl.begin(sp, d, index, count, link.seq());
         }
         BlockPos p = link.pos();
         if (p == null || !w.isChunkLoaded(p) || !(w.getBlockState(p).getBlock() instanceof SurveillanceCameraBlock)) {
@@ -195,8 +205,43 @@ public class RemoteItem extends Item {
             return false;
         }
         DroneControl.release(sp.getUuid());
-        VigiCam.sendViewCamera(sp, p, w.getBlockState(p).get(HorizontalFacingBlock.FACING).asRotation(), index, count);
+        VigiCam.sendViewCamera(sp, p, w.getBlockState(p).get(HorizontalFacingBlock.FACING).asRotation(), index, count, link.seq());
         return true;
+    }
+
+    /** O vínculo que a tecla "próximo" usa como ponto de partida, ou null. */
+    static Link selected(ItemStack stack, List<Link> links) {
+        if (links.isEmpty()) return null;
+        return links.get(Math.floorMod(stack.getOrCreateNbt().getInt("Sel"), links.size()));
+    }
+
+    /** Depois de apagar vínculos, o "selecionado" continua sendo o mesmo dispositivo (e não o que ocupou o lugar dele). */
+    static void keepSelection(ItemStack stack, List<Link> links, @Nullable Link before) {
+        if (before == null) return;
+        for (int i = 0; i < links.size(); i++) {
+            if (links.get(i).same(before)) {
+                stack.getOrCreateNbt().putInt("Sel", i);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Abre ({@code open}) ou fecha e tranca uma porta, à distância e sem mensagem (para "abrir/fechar todas").
+     * @return 1 se mudou, 0 se já estava assim, -1 se não deu (offline, longe, outra dimensão ou sem acesso)
+     */
+    public static int setDoor(ServerPlayerEntity sp, Link link, boolean open) {
+        ServerWorld w = sp.getServerWorld();
+        BlockPos p = link.pos();
+        if (!link.door() || !dimOf(w).equals(link.dim()) || p == null || !w.isChunkLoaded(p)
+                || !(w.getBlockState(p).getBlock() instanceof ReinforcedDoorBlock door)) return -1;
+        if (p.getSquaredDistance(sp.getPos()) > MAX_DISTANCE * MAX_DISTANCE) return -1;
+        if (w.getBlockEntity(p) instanceof ReinforcedDoorBlockEntity be && be.hasOwner() && !be.isOwner(sp)) return -1;
+        BlockState st = w.getBlockState(p);
+        boolean isOpen = st.get(ReinforcedDoorBlock.OPEN);
+        if (isOpen == open) return 0;
+        if (open) door.remoteOpen(w, p, st); else door.remoteClose(w, p, st);
+        return 1;
     }
 
     /** Abre a porta (se estiver fechada) ou fecha e tranca (se estiver aberta), à distância. Devolve a mensagem do painel. */

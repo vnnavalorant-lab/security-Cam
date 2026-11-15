@@ -29,7 +29,7 @@ public final class RemotePanel {
     private RemotePanel() {}
 
     /** Ações do cliente (pacote REMOTE_ACTION; o segundo número é o índice do dispositivo, ou o tipo em REMOVE_ALL). */
-    public static final int ACT_REFRESH = 0, ACT_PING = 1, ACT_USE = 2, ACT_REMOVE = 3, ACT_REMOVE_ALL = 4;
+    public static final int ACT_REFRESH = 0, ACT_PING = 1, ACT_USE = 2, ACT_REMOVE = 3, ACT_REMOVE_ALL = 4, ACT_DOORS_ALL = 5;
 
     private static final String OFFLINE_MSG = "Dispositivo OFFLINE. Sem conexao com o controle.";
 
@@ -90,18 +90,40 @@ public final class RemotePanel {
 
             case ACT_REMOVE -> {
                 if (!valid) return;
+                RemoteItem.Link before = RemoteItem.selected(stack, links);
                 RemoteItem.Link gone = links.remove(index);
+                RemoteItem.keepSelection(stack, links, before);
                 RemoteItem.write(stack, links);
                 send(sp, false, RemoteItem.idOf(gone) + " removido do controle.");
             }
 
             case ACT_REMOVE_ALL -> {
                 int before = links.size();
+                RemoteItem.Link sel = RemoteItem.selected(stack, links);
                 links.removeIf(l -> l.kind() == index);
                 int n = before - links.size();
+                RemoteItem.keepSelection(stack, links, sel);
                 RemoteItem.write(stack, links);
                 String noun = RemoteDevices.noun(index);
                 send(sp, false, n + " " + (n == 1 ? noun + " removido(a)" : noun + "s removidos(as)") + ".");
+            }
+
+            case ACT_DOORS_ALL -> {
+                // index 1 = abrir todas, 0 = fechar (e trancar) todas; as offline / sem acesso ficam de fora
+                boolean open = index == 1;
+                int changed = 0, same = 0, failed = 0;
+                for (RemoteItem.Link l : links) {
+                    if (!l.door()) continue;
+                    int r = RemoteItem.setDoor(sp, l, open);
+                    if (r > 0) changed++; else if (r == 0) same++; else failed++;
+                }
+                String what = open ? "abertas" : "fechadas";
+                String text;
+                if (changed + same + failed == 0) text = "Nenhuma porta no controle.";
+                else if (changed == 0 && failed == 0) text = "Todas as portas ja estavam " + what + ".";
+                else text = changed + (changed == 1 ? " porta " : " portas ") + what + "."
+                        + (failed > 0 ? " " + failed + " sem conexao (offline ou sem acesso)." : "");
+                send(sp, false, text);
             }
 
             default -> { }

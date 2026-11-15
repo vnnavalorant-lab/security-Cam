@@ -92,20 +92,20 @@ public class VigiCamClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_CAMERA, (client, handler, buf, sender) -> {
             BlockPos pos = buf.readBlockPos();
             float yaw = buf.readFloat();
-            int idx = buf.readInt(), cnt = buf.readInt();
+            int idx = buf.readInt(), cnt = buf.readInt(), sq = buf.readInt();
             client.execute(() -> {
                 if (client.currentScreen instanceof RemotePanelScreen) client.setScreen(null);   // veio do painel do controle
-                boolean fresh = CameraViewClient.startBlock(client, pos, yaw, idx, cnt);
+                boolean fresh = CameraViewClient.startBlock(client, pos, yaw, idx, cnt, sq);
                 applyShader(client, fresh);
                 if (fresh) sendViewState(true);
             });
         });
         ClientPlayNetworking.registerGlobalReceiver(VigiCam.VIEW_DRONE, (client, handler, buf, sender) -> {
             int id = buf.readInt();
-            int idx = buf.readInt(), cnt = buf.readInt();
+            int idx = buf.readInt(), cnt = buf.readInt(), sq = buf.readInt();
             client.execute(() -> {
                 if (client.currentScreen instanceof RemotePanelScreen) client.setScreen(null);
-                boolean fresh = CameraViewClient.startDrone(client, id, idx, cnt);
+                boolean fresh = CameraViewClient.startDrone(client, id, idx, cnt, sq);
                 applyShader(client, fresh);
                 if (fresh) sendViewState(true);
             });
@@ -314,7 +314,10 @@ public class VigiCamClient implements ClientModInitializer {
         ctx.drawText(mc.textRenderer, (blink ? "● " : "  ") + "LIVE", m + 6, m + 6, 0xFFFF3030, true);
 
         // título e modo de controle
-        String title = drone ? "DRONE" : "CAM";
+        // com o controle: o mesmo ID do painel (CAM-02, DRN-01); sem controle (visão direta): só CAM / DRONE
+        String title = CameraViewClient.getSeq() > 0
+                ? RemoteDevices.id(drone ? RemoteDevices.DRONE : RemoteDevices.CAM, CameraViewClient.getSeq())
+                : (drone ? "DRONE" : "CAM");
         if (CameraViewClient.getCount() > 0) title += "  " + (CameraViewClient.getIndex() + 1) + "/" + CameraViewClient.getCount();
         title += thermal ? "  TÉRMICA" : (night ? "  NOTURNA" : "  NORMAL");
         ctx.drawText(mc.textRenderer, title, m + 6, m + 18, color, true);
